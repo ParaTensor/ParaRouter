@@ -1,32 +1,31 @@
-import React, { useEffect, useState } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Calendar, Download, Zap, TrendingUp, Clock, DollarSign, Loader2 } from 'lucide-react';
-import { cn } from '../lib/utils';
-import { db, auth } from '../firebase';
-import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
+import React, {useEffect, useState} from 'react';
+import {AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer} from 'recharts';
+import {Calendar, Download, Zap, TrendingUp, Clock, DollarSign, Loader2} from 'lucide-react';
+import {apiGet} from '../lib/api';
+import {localUser} from '../lib/session';
 
 const initialData = [
-  { date: 'Mar 23', tokens: 45000, cost: 0.12 },
-  { date: 'Mar 24', tokens: 52000, cost: 0.15 },
-  { date: 'Mar 25', tokens: 38000, cost: 0.08 },
-  { date: 'Mar 26', tokens: 65000, cost: 0.22 },
-  { date: 'Mar 27', tokens: 85000, cost: 0.35 },
-  { date: 'Mar 28', tokens: 72000, cost: 0.28 },
-  { date: 'Mar 29', tokens: 95000, cost: 0.42 },
+  {date: 'Mar 23', tokens: 45000, cost: 0.12},
+  {date: 'Mar 24', tokens: 52000, cost: 0.15},
+  {date: 'Mar 25', tokens: 38000, cost: 0.08},
+  {date: 'Mar 26', tokens: 65000, cost: 0.22},
+  {date: 'Mar 27', tokens: 85000, cost: 0.35},
+  {date: 'Mar 28', tokens: 72000, cost: 0.28},
+  {date: 'Mar 29', tokens: 95000, cost: 0.42},
 ];
 
 const initialLogs = [
-  { id: '1', time: '10:15:22', date: '2024-03-29', model: 'claude-3.5-sonnet', tokens: 1240, cost: '$0.018', status: 'Success', latency: '1.2s' },
-  { id: '2', time: '10:12:05', date: '2024-03-29', model: 'gpt-4o', tokens: 850, cost: '$0.012', status: 'Success', latency: '0.8s' },
-  { id: '3', time: '09:55:10', date: '2024-03-29', model: 'llama-3.1-405b', tokens: 2100, cost: '$0.004', status: 'Success', latency: '1.5s' },
-  { id: '4', time: '09:42:33', date: '2024-03-29', model: 'deepseek-chat', tokens: 4500, cost: '$0.001', status: 'Success', latency: '0.5s' },
-  { id: '5', time: '09:30:15', date: '2024-03-29', model: 'claude-3.5-sonnet', tokens: 520, cost: '$0.007', status: 'Success', latency: '1.1s' },
+  {id: '1', time: '10:15:22', date: '2024-03-29', model: 'claude-3.5-sonnet', tokens: 1240, cost: '$0.018', status: 'Success', latency: '1.2s'},
+  {id: '2', time: '10:12:05', date: '2024-03-29', model: 'gpt-4o', tokens: 850, cost: '$0.012', status: 'Success', latency: '0.8s'},
+  {id: '3', time: '09:55:10', date: '2024-03-29', model: 'llama-3.1-405b', tokens: 2100, cost: '$0.004', status: 'Success', latency: '1.5s'},
+  {id: '4', time: '09:42:33', date: '2024-03-29', model: 'deepseek-chat', tokens: 4500, cost: '$0.001', status: 'Success', latency: '0.5s'},
+  {id: '5', time: '09:30:15', date: '2024-03-29', model: 'claude-3.5-sonnet', tokens: 520, cost: '$0.007', status: 'Success', latency: '1.1s'},
 ];
 
 export default function ActivityView() {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const isAdmin = auth.currentUser?.email === 'lipeng.sh@gmail.com';
+  const isAdmin = localUser.role === 'admin';
 
   useEffect(() => {
     if (!isAdmin) {
@@ -34,30 +33,33 @@ export default function ActivityView() {
       setLoading(false);
       return;
     }
-    const q = query(collection(db, 'activity'), orderBy('timestamp', 'desc'), limit(50));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const logsData = snapshot.docs.map(doc => {
-        const data = doc.data();
-        const dateObj = new Date(data.timestamp);
-        return {
-          id: doc.id,
-          time: dateObj.toLocaleTimeString(),
-          date: dateObj.toLocaleDateString(),
-          model: data.model,
-          tokens: data.tokens || 0,
-          cost: data.cost || '$0.00',
-          status: data.status === 200 ? 'Success' : 'Error',
-          latency: `${(data.latency / 1000).toFixed(1)}s`
-        };
-      });
-      setLogs(logsData.length > 0 ? logsData : initialLogs);
-      setLoading(false);
-    }, (error) => {
-      console.error('Firestore Error:', error);
-      setLogs(initialLogs);
-      setLoading(false);
-    });
-    return () => unsubscribe();
+
+    const loadActivity = async () => {
+      try {
+        const rows = await apiGet<any[]>('/api/activity?limit=50');
+        const logsData = rows.map((row) => {
+          const dateObj = new Date(Number(row.timestamp));
+          return {
+            id: String(row.id),
+            time: dateObj.toLocaleTimeString(),
+            date: dateObj.toLocaleDateString(),
+            model: row.model,
+            tokens: row.tokens || 0,
+            cost: row.cost || '$0.00',
+            status: row.status === 200 ? 'Success' : 'Error',
+            latency: `${((row.latency || 0) / 1000).toFixed(1)}s`,
+          };
+        });
+        setLogs(logsData.length > 0 ? logsData : initialLogs);
+      } catch (error) {
+        console.error('Load activity failed:', error);
+        setLogs(initialLogs);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadActivity();
   }, [isAdmin]);
 
   if (loading) {
@@ -87,7 +89,6 @@ export default function ActivityView() {
         </div>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm">
           <div className="flex items-center gap-2 text-zinc-400 mb-2">
@@ -129,67 +130,40 @@ export default function ActivityView() {
         </div>
       </div>
 
-      {/* Chart */}
       <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm">
         <div className="flex items-center justify-between mb-8">
           <h3 className="font-bold text-sm uppercase tracking-widest text-zinc-400">Token Usage History</h3>
-          <div className="flex gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-black" />
-              <span className="text-[10px] font-bold text-zinc-500 uppercase">Tokens</span>
-            </div>
-          </div>
         </div>
         <div className="h-[300px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={initialData}>
               <defs>
                 <linearGradient id="colorTokens" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#000" stopOpacity={0.05}/>
-                  <stop offset="95%" stopColor="#000" stopOpacity={0}/>
+                  <stop offset="5%" stopColor="#000" stopOpacity={0.05} />
+                  <stop offset="95%" stopColor="#000" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f5f5f5" />
-              <XAxis 
-                dataKey="date" 
-                axisLine={false} 
-                tickLine={false} 
-                tick={{ fontSize: 10, fill: '#a1a1aa', fontWeight: 600 }}
-                dy={10}
-              />
-              <YAxis 
-                axisLine={false} 
-                tickLine={false} 
-                tick={{ fontSize: 10, fill: '#a1a1aa', fontWeight: 600 }}
-              />
-              <Tooltip 
-                contentStyle={{ 
-                  borderRadius: '12px', 
-                  border: '1px solid #f4f4f5', 
+              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#a1a1aa', fontWeight: 600}} dy={10} />
+              <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#a1a1aa', fontWeight: 600}} />
+              <Tooltip
+                contentStyle={{
+                  borderRadius: '12px',
+                  border: '1px solid #f4f4f5',
                   boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
                   fontSize: '12px',
-                  fontWeight: '600'
+                  fontWeight: '600',
                 }}
               />
-              <Area 
-                type="monotone" 
-                dataKey="tokens" 
-                stroke="#000" 
-                fillOpacity={1} 
-                fill="url(#colorTokens)" 
-                strokeWidth={2}
-                animationDuration={1500}
-              />
+              <Area type="monotone" dataKey="tokens" stroke="#000" fillOpacity={1} fill="url(#colorTokens)" strokeWidth={2} animationDuration={1500} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Recent Logs */}
       <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
         <div className="px-6 py-4 border-b border-gray-50 flex items-center justify-between">
           <h3 className="font-bold text-sm uppercase tracking-widest text-zinc-400">Recent Requests</h3>
-          <button className="text-[11px] font-bold text-zinc-900 hover:underline">View All</button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import Navbar from './components/Navbar';
 import ModelsView from './views/Models';
 import KeysView from './views/Keys';
@@ -8,35 +8,10 @@ import ChatView from './views/Chat';
 import DocsView from './views/Docs';
 import RankingsView from './views/Rankings';
 import HubConsoleView from './views/HubConsole';
-import LoginView from './views/Login';
-import { auth } from './firebase';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { motion, AnimatePresence } from 'motion/react';
+import {motion, AnimatePresence} from 'motion/react';
 
 export default function App() {
   const [activeTab, setActiveTab] = React.useState('models');
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#fafafa]">
-        <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <LoginView />;
-  }
 
   const renderContent = () => {
     switch (activeTab) {
@@ -64,16 +39,16 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#fafafa] text-black font-sans selection:bg-black selection:text-white">
       <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
-      
+
       <main className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
+              initial={{opacity: 0, y: 10}}
+              animate={{opacity: 1, y: 0}}
+              exit={{opacity: 0, y: -10}}
+              transition={{duration: 0.2, ease: 'easeOut'}}
             >
               {renderContent()}
             </motion.div>
@@ -81,7 +56,6 @@ export default function App() {
         </div>
       </main>
 
-      {/* Footer */}
       <footer className="border-t bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
@@ -96,7 +70,7 @@ export default function App() {
                 The unified interface for LLMs. Access any model via a single API.
               </p>
             </div>
-            
+
             <div>
               <h4 className="font-bold text-sm mb-4 uppercase tracking-widest text-gray-400">Product</h4>
               <ul className="space-y-2 text-sm text-gray-600">
