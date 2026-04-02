@@ -22,6 +22,7 @@ export default function PricingView() {
   const [draft, setDraft] = React.useState<PricingRow[]>([]);
   const [providers, setProviders] = React.useState<string[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [scope, setScope] = React.useState<'global' | 'provider'>('global');
   const [model, setModel] = React.useState('');
   const [providerAccountId, setProviderAccountId] = React.useState('');
   const [inputPrice, setInputPrice] = React.useState('');
@@ -52,9 +53,10 @@ export default function PricingView() {
 
   const saveDraft = async () => {
     if (!model || !inputPrice || !outputPrice) return;
+    if (scope === 'provider' && !providerAccountId) return;
     await apiPut('/api/pricing/draft', {
       model,
-      provider_account_id: providerAccountId || undefined,
+      provider_account_id: scope === 'provider' ? providerAccountId : undefined,
       price_mode: 'fixed',
       input_price: Number(inputPrice),
       output_price: Number(outputPrice),
@@ -105,18 +107,20 @@ export default function PricingView() {
             placeholder="model id (e.g. openai/gpt-4o)"
             className="px-3 py-2 border rounded-lg"
           />
-          <select
-            value={providerAccountId}
-            onChange={(e) => setProviderAccountId(e.target.value)}
-            className="px-3 py-2 border rounded-lg"
-          >
-            <option value="">Global (All Providers)</option>
-            {providers.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2 border rounded-lg px-2">
+            <button
+              onClick={() => setScope('global')}
+              className={`px-2 py-1 text-xs rounded ${scope === 'global' ? 'bg-black text-white' : 'text-zinc-600'}`}
+            >
+              Global
+            </button>
+            <button
+              onClick={() => setScope('provider')}
+              className={`px-2 py-1 text-xs rounded ${scope === 'provider' ? 'bg-black text-white' : 'text-zinc-600'}`}
+            >
+              Provider-bound
+            </button>
+          </div>
           <input
             value={inputPrice}
             onChange={(e) => setInputPrice(e.target.value)}
@@ -124,6 +128,27 @@ export default function PricingView() {
             className="px-3 py-2 border rounded-lg"
           />
         </div>
+        {scope === 'provider' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <select
+              value={providerAccountId}
+              onChange={(e) => setProviderAccountId(e.target.value)}
+              className="px-3 py-2 border rounded-lg"
+            >
+              <option value="">Select provider account</option>
+              {providers.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-zinc-500 flex items-center">
+              {providers.length > 0
+                ? 'This price will override global pricing for the selected provider.'
+                : 'No provider accounts found yet. Add provider keys in Settings first.'}
+            </p>
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <input
             value={outputPrice}
