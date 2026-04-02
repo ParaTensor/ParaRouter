@@ -70,7 +70,7 @@ export default function PricingView() {
     <div className="max-w-6xl space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Pricing Center</h1>
-        <p className="text-gray-500 mt-1">L1 快速定价：维护全局模型价格并发布。</p>
+        <p className="text-gray-500 mt-1">L1 quick pricing: manage global model prices and publish changes.</p>
       </div>
 
       <div className="bg-white border border-gray-100 rounded-2xl p-6 space-y-4">
