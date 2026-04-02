@@ -31,25 +31,29 @@
 CREATE TABLE model_pricings (
   id BIGSERIAL PRIMARY KEY,
   model TEXT NOT NULL,
-  provider_account_id TEXT,                    -- null=全局
+  provider_account_id TEXT NOT NULL DEFAULT '', -- ''=全局，非空=绑定 Provider Account
   price_mode TEXT NOT NULL,                    -- fixed | markup
   input_price DECIMAL(12,6),
   output_price DECIMAL(12,6),
+  cache_read_price DECIMAL(12,6),
+  cache_write_price DECIMAL(12,6),
   markup_rate DECIMAL(8,4),
   currency TEXT NOT NULL DEFAULT 'USD',
   version TEXT NOT NULL,
   updated_at BIGINT NOT NULL,
-  UNIQUE(model, provider_account_id)
+  UNIQUE(model, provider_account_id, version)
 );
 
 -- 草稿表（编辑区）
 CREATE TABLE model_pricings_draft (
   id BIGSERIAL PRIMARY KEY,
   model TEXT NOT NULL,
-  provider_account_id TEXT,
+  provider_account_id TEXT NOT NULL DEFAULT '',
   price_mode TEXT NOT NULL,
   input_price DECIMAL(12,6),
   output_price DECIMAL(12,6),
+  cache_read_price DECIMAL(12,6),
+  cache_write_price DECIMAL(12,6),
   markup_rate DECIMAL(8,4),
   currency TEXT NOT NULL DEFAULT 'USD',
   updated_at BIGINT NOT NULL,

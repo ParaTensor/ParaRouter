@@ -90,6 +90,8 @@ pub struct PricingDraftUpsertRequest {
     price_mode: String,
     input_price: Option<f64>,
     output_price: Option<f64>,
+    cache_read_price: Option<f64>,
+    cache_write_price: Option<f64>,
     markup_rate: Option<f64>,
     currency: Option<String>,
 }
@@ -666,6 +668,16 @@ pub async fn put_pricing_draft(
         },
         output_price: if mode == "fixed" {
             payload.output_price
+        } else {
+            None
+        },
+        cache_read_price: if mode == "fixed" {
+            payload.cache_read_price
+        } else {
+            None
+        },
+        cache_write_price: if mode == "fixed" {
+            payload.cache_write_price
         } else {
             None
         },

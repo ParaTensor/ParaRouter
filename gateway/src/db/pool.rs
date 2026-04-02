@@ -402,7 +402,7 @@ impl DatabasePool {
         let state = self.get_pricing_state().await?;
         match self {
             Self::Postgres(pool) => Ok(sqlx::query_as::<_, PricingRecord>(
-                "SELECT model, NULLIF(provider_account_id, '') AS provider_account_id, price_mode, input_price, output_price, markup_rate, currency, version, updated_at FROM model_pricings WHERE version = $1 ORDER BY model ASC, provider_account_id ASC",
+                "SELECT model, NULLIF(provider_account_id, '') AS provider_account_id, price_mode, input_price, output_price, cache_read_price, cache_write_price, markup_rate, currency, version, updated_at FROM model_pricings WHERE version = $1 ORDER BY model ASC, provider_account_id ASC",
             )
             .bind(state.current_version)
             .fetch_all(pool)
@@ -413,7 +413,7 @@ impl DatabasePool {
     pub async fn list_pricing_by_version(&self, version: &str) -> Result<Vec<PricingRecord>> {
         match self {
             Self::Postgres(pool) => Ok(sqlx::query_as::<_, PricingRecord>(
-                "SELECT model, NULLIF(provider_account_id, '') AS provider_account_id, price_mode, input_price, output_price, markup_rate, currency, version, updated_at FROM model_pricings WHERE version = $1 ORDER BY model ASC, provider_account_id ASC",
+                "SELECT model, NULLIF(provider_account_id, '') AS provider_account_id, price_mode, input_price, output_price, cache_read_price, cache_write_price, markup_rate, currency, version, updated_at FROM model_pricings WHERE version = $1 ORDER BY model ASC, provider_account_id ASC",
             )
             .bind(version)
             .fetch_all(pool)
@@ -424,7 +424,7 @@ impl DatabasePool {
     pub async fn list_pricing_draft(&self) -> Result<Vec<PricingDraftRecord>> {
         match self {
             Self::Postgres(pool) => Ok(sqlx::query_as::<_, PricingDraftRecord>(
-                "SELECT model, NULLIF(provider_account_id, '') AS provider_account_id, price_mode, input_price, output_price, markup_rate, currency, updated_at FROM model_pricings_draft ORDER BY model ASC, provider_account_id ASC",
+                "SELECT model, NULLIF(provider_account_id, '') AS provider_account_id, price_mode, input_price, output_price, cache_read_price, cache_write_price, markup_rate, currency, updated_at FROM model_pricings_draft ORDER BY model ASC, provider_account_id ASC",
             )
             .fetch_all(pool)
             .await?),
@@ -438,13 +438,15 @@ impl DatabasePool {
             Self::Postgres(pool) => {
                 sqlx::query(
                     r#"
-                    INSERT INTO model_pricings_draft (model, provider_account_id, price_mode, input_price, output_price, markup_rate, currency, updated_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    INSERT INTO model_pricings_draft (model, provider_account_id, price_mode, input_price, output_price, cache_read_price, cache_write_price, markup_rate, currency, updated_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                     ON CONFLICT (model, provider_account_id)
                     DO UPDATE SET
                       price_mode = EXCLUDED.price_mode,
                       input_price = EXCLUDED.input_price,
                       output_price = EXCLUDED.output_price,
+                      cache_read_price = EXCLUDED.cache_read_price,
+                      cache_write_price = EXCLUDED.cache_write_price,
                       markup_rate = EXCLUDED.markup_rate,
                       currency = EXCLUDED.currency,
                       updated_at = EXCLUDED.updated_at
@@ -455,6 +457,8 @@ impl DatabasePool {
                 .bind(item.price_mode)
                 .bind(item.input_price)
                 .bind(item.output_price)
+                .bind(item.cache_read_price)
+                .bind(item.cache_write_price)
                 .bind(item.markup_rate)
                 .bind(item.currency)
                 .bind(now)
@@ -516,8 +520,8 @@ impl DatabasePool {
 
                 sqlx::query(
                     r#"
-                    INSERT INTO model_pricings (model, provider_account_id, price_mode, input_price, output_price, markup_rate, currency, version, updated_at)
-                    SELECT model, provider_account_id, price_mode, input_price, output_price, markup_rate, currency, $1, updated_at
+                    INSERT INTO model_pricings (model, provider_account_id, price_mode, input_price, output_price, cache_read_price, cache_write_price, markup_rate, currency, version, updated_at)
+                    SELECT model, provider_account_id, price_mode, input_price, output_price, cache_read_price, cache_write_price, markup_rate, currency, $1, updated_at
                     FROM model_pricings_draft
                     "#,
                 )
@@ -609,7 +613,7 @@ impl DatabasePool {
             Self::Postgres(pool) => {
                 if let Some(provider_id) = provider_account_id {
                     if let Some(record) = sqlx::query_as::<_, PricingRecord>(
-                        "SELECT model, NULLIF(provider_account_id, '') AS provider_account_id, price_mode, input_price, output_price, markup_rate, currency, version, updated_at FROM model_pricings WHERE model = $1 AND provider_account_id = $2 AND version = $3",
+                        "SELECT model, NULLIF(provider_account_id, '') AS provider_account_id, price_mode, input_price, output_price, cache_read_price, cache_write_price, markup_rate, currency, version, updated_at FROM model_pricings WHERE model = $1 AND provider_account_id = $2 AND version = $3",
                     )
                     .bind(model)
                     .bind(provider_id)
@@ -621,7 +625,7 @@ impl DatabasePool {
                     }
                 }
                 let global = sqlx::query_as::<_, PricingRecord>(
-                    "SELECT model, NULLIF(provider_account_id, '') AS provider_account_id, price_mode, input_price, output_price, markup_rate, currency, version, updated_at FROM model_pricings WHERE model = $1 AND provider_account_id = '' AND version = $2",
+                    "SELECT model, NULLIF(provider_account_id, '') AS provider_account_id, price_mode, input_price, output_price, cache_read_price, cache_write_price, markup_rate, currency, version, updated_at FROM model_pricings WHERE model = $1 AND provider_account_id = '' AND version = $2",
                 )
                 .bind(model)
                 .bind(&state.current_version)

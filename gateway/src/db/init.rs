@@ -91,6 +91,8 @@ async fn ensure_schema_postgres(pool: &sqlx::Pool<sqlx::Postgres>) -> Result<()>
             price_mode TEXT NOT NULL CHECK (price_mode IN ('fixed', 'markup')),
             input_price DOUBLE PRECISION,
             output_price DOUBLE PRECISION,
+            cache_read_price DOUBLE PRECISION,
+            cache_write_price DOUBLE PRECISION,
             markup_rate DOUBLE PRECISION,
             currency TEXT NOT NULL DEFAULT 'USD',
             version TEXT NOT NULL,
@@ -110,6 +112,8 @@ async fn ensure_schema_postgres(pool: &sqlx::Pool<sqlx::Postgres>) -> Result<()>
             price_mode TEXT NOT NULL CHECK (price_mode IN ('fixed', 'markup')),
             input_price DOUBLE PRECISION,
             output_price DOUBLE PRECISION,
+            cache_read_price DOUBLE PRECISION,
+            cache_write_price DOUBLE PRECISION,
             markup_rate DOUBLE PRECISION,
             currency TEXT NOT NULL DEFAULT 'USD',
             updated_at BIGINT NOT NULL,
@@ -142,6 +146,27 @@ async fn ensure_schema_postgres(pool: &sqlx::Pool<sqlx::Postgres>) -> Result<()>
     for statement in statements {
         sqlx::query(statement).execute(pool).await?;
     }
+
+    sqlx::query(
+        "ALTER TABLE model_pricings ADD COLUMN IF NOT EXISTS cache_read_price DOUBLE PRECISION",
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query(
+        "ALTER TABLE model_pricings ADD COLUMN IF NOT EXISTS cache_write_price DOUBLE PRECISION",
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query(
+        "ALTER TABLE model_pricings_draft ADD COLUMN IF NOT EXISTS cache_read_price DOUBLE PRECISION",
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query(
+        "ALTER TABLE model_pricings_draft ADD COLUMN IF NOT EXISTS cache_write_price DOUBLE PRECISION",
+    )
+    .execute(pool)
+    .await?;
 
     sqlx::query(
         r#"

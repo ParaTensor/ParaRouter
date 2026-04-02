@@ -7,16 +7,27 @@ type PricingRow = {
   price_mode: 'fixed' | 'markup';
   input_price?: number | null;
   output_price?: number | null;
+  cache_read_price?: number | null;
+  cache_write_price?: number | null;
   markup_rate?: number | null;
   currency: string;
 };
 
+type ProviderKeyRow = {
+  provider: string;
+  status: string;
+};
+
 export default function PricingView() {
   const [draft, setDraft] = React.useState<PricingRow[]>([]);
+  const [providers, setProviders] = React.useState<string[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [model, setModel] = React.useState('');
+  const [providerAccountId, setProviderAccountId] = React.useState('');
   const [inputPrice, setInputPrice] = React.useState('');
   const [outputPrice, setOutputPrice] = React.useState('');
+  const [cacheReadPrice, setCacheReadPrice] = React.useState('');
+  const [cacheWritePrice, setCacheWritePrice] = React.useState('');
   const [preview, setPreview] = React.useState<any>(null);
 
   const loadDraft = React.useCallback(async () => {
@@ -29,22 +40,34 @@ export default function PricingView() {
     }
   }, []);
 
+  const loadProviders = React.useCallback(async () => {
+    const rows = await apiGet<ProviderKeyRow[]>('/api/provider-keys');
+    setProviders(rows.map((r) => r.provider));
+  }, []);
+
   React.useEffect(() => {
     loadDraft();
-  }, [loadDraft]);
+    loadProviders();
+  }, [loadDraft, loadProviders]);
 
   const saveDraft = async () => {
     if (!model || !inputPrice || !outputPrice) return;
     await apiPut('/api/pricing/draft', {
       model,
+      provider_account_id: providerAccountId || undefined,
       price_mode: 'fixed',
       input_price: Number(inputPrice),
       output_price: Number(outputPrice),
+      cache_read_price: cacheReadPrice ? Number(cacheReadPrice) : null,
+      cache_write_price: cacheWritePrice ? Number(cacheWritePrice) : null,
       currency: 'USD',
     });
     setModel('');
+    setProviderAccountId('');
     setInputPrice('');
     setOutputPrice('');
+    setCacheReadPrice('');
+    setCacheWritePrice('');
     await loadDraft();
   };
 
@@ -70,28 +93,54 @@ export default function PricingView() {
     <div className="max-w-6xl space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Pricing Center</h1>
-        <p className="text-gray-500 mt-1">L1 quick pricing: manage global model prices and publish changes.</p>
+        <p className="text-gray-500 mt-1">Bind pricing to global or provider account and configure input/output/cache prices.</p>
       </div>
 
       <div className="bg-white border border-gray-100 rounded-2xl p-6 space-y-4">
         <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Quick Price Editor</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <input
             value={model}
             onChange={(e) => setModel(e.target.value)}
             placeholder="model id (e.g. openai/gpt-4o)"
             className="px-3 py-2 border rounded-lg"
           />
+          <select
+            value={providerAccountId}
+            onChange={(e) => setProviderAccountId(e.target.value)}
+            className="px-3 py-2 border rounded-lg"
+          >
+            <option value="">Global (All Providers)</option>
+            {providers.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
           <input
             value={inputPrice}
             onChange={(e) => setInputPrice(e.target.value)}
             placeholder="input price / 1M"
             className="px-3 py-2 border rounded-lg"
           />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <input
             value={outputPrice}
             onChange={(e) => setOutputPrice(e.target.value)}
             placeholder="output price / 1M"
+            className="px-3 py-2 border rounded-lg"
+          />
+          <input
+            value={cacheReadPrice}
+            onChange={(e) => setCacheReadPrice(e.target.value)}
+            placeholder="cache read price / 1M (optional)"
+            className="px-3 py-2 border rounded-lg"
+          />
+          <input
+            value={cacheWritePrice}
+            onChange={(e) => setCacheWritePrice(e.target.value)}
+            placeholder="cache write price / 1M (optional)"
             className="px-3 py-2 border rounded-lg"
           />
           <button onClick={saveDraft} className="bg-black text-white rounded-lg px-4 py-2 font-semibold">
@@ -121,7 +170,7 @@ export default function PricingView() {
                   <span className="text-zinc-500 ml-2">{row.provider_account_id || 'global'}</span>
                   <span className="text-zinc-500 ml-2">
                     {row.price_mode === 'fixed'
-                      ? `in ${row.input_price} / out ${row.output_price}`
+                      ? `in ${row.input_price} / out ${row.output_price} / cache-r ${row.cache_read_price ?? '-'} / cache-w ${row.cache_write_price ?? '-'}`
                       : `markup ${row.markup_rate}`}
                   </span>
                 </div>
