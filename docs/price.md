@@ -1,63 +1,92 @@
-最推荐：使用 OpenRouter 的 /api/v1/models 接口（完美适配你复刻 OpenRouter）
-这是目前最简单、最全面、更新最及时的方式。OpenRouter 本身就是把各厂商官方价格 pass-through 聚合在一起的。
+# OpenHub 定价中心开发规划（由浅入深）
 
-优点：
-覆盖 300+ 模型（包括最新 o3、Claude 4、Grok-3、Qwen 等）
-直接包含 prompt / completion / input_cache_read / output_cache_read / reasoning / image 等多维度价格
-新模型发布后几小时内就会更新
-价格就是各厂商官方价格（你完全可以直接当成本价使用）
+## 1. 目标
+- 建立唯一“对客售价”入口：`/admin/pricing`。
+- 将 Provider 连接管理与定价彻底解耦，避免重复维护和口径不一致。
+- 支持草稿、发布、回滚，保证线上计费稳定可审计。
 
-实现步骤（超简单）：
-去 https://openrouter.ai/keys 免费生成一个 API Key（不需要付费）
-写一个 cron job（每天跑 1~2 次）
+## 2. 边界与原则
+- Provider 页面：只管理连接能力与上游成本参数（可选），不编辑对客售价。
+- 定价中心：唯一可写对客售价入口。
+- 结算优先级固定：`provider_account + model 覆写 > global model 价格 > reject`。
+- 禁止“固定价 + markup_rate”同时生效，防止重复加价。
 
+## 3. 交互分层（由浅入深）
+### L1 快速定价（默认）
+- 按模型维护全局 `input/output` 单价。
+- 3 步完成：筛选模型 -> 改价 -> 发布。
 
-Node.js / TypeScript 示例代码（直接复制到你的 cron service 里）：
-TypeScriptimport { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+### L2 批量规则
+- 按模型前缀、Provider 分组批量调价（如“OpenAI 全系 +15%”）。
+- 展示本次影响模型数与变更摘要。
 
-async function syncPricesFromOpenRouter() {
-  const res = await fetch('https://openrouter.ai/api/v1/models', {
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`, // 你的 Key
-      'Content-Type': 'application/json',
-    },
-  });
+### L3 高级模式
+- 单模型+单 Provider Account 覆写价。
+- 发布前利润预估、命中路径预览、灰度发布（后续）。
 
-  const data = await res.json();
+## 4. 数据模型（MVP）
+```sql
+-- 正式表（只读给运行时）
+CREATE TABLE model_pricings (
+  id BIGSERIAL PRIMARY KEY,
+  model TEXT NOT NULL,
+  provider_account_id TEXT,                    -- null=全局
+  price_mode TEXT NOT NULL,                    -- fixed | markup
+  input_price DECIMAL(12,6),
+  output_price DECIMAL(12,6),
+  markup_rate DECIMAL(8,4),
+  currency TEXT NOT NULL DEFAULT 'USD',
+  version TEXT NOT NULL,
+  updated_at BIGINT NOT NULL,
+  UNIQUE(model, provider_account_id)
+);
 
-  for (const model of data.data) {
-    const p = model.pricing || {}; // OpenRouter 返回的 pricing 对象
+-- 草稿表（编辑区）
+CREATE TABLE model_pricings_draft (
+  id BIGSERIAL PRIMARY KEY,
+  model TEXT NOT NULL,
+  provider_account_id TEXT,
+  price_mode TEXT NOT NULL,
+  input_price DECIMAL(12,6),
+  output_price DECIMAL(12,6),
+  markup_rate DECIMAL(8,4),
+  currency TEXT NOT NULL DEFAULT 'USD',
+  updated_at BIGINT NOT NULL,
+  UNIQUE(model, provider_account_id)
+);
 
-    await prisma.modelPricing.upsert({
-      where: { model: model.id },
-      update: {
-        input_price: parseFloat(p.prompt || '0') * 1_000_000,        // 转成「每百万 token」价格
-        output_price: parseFloat(p.completion || '0') * 1_000_000,
-        cache_read_price: p.input_cache_read 
-          ? parseFloat(p.input_cache_read) * 1_000_000 
-          : null,
-        cache_write_price: p.output_cache_read 
-          ? parseFloat(p.output_cache_read) * 1_000_000 
-          : null,
-        reasoning_price: p.reasoning 
-          ? parseFloat(p.reasoning) * 1_000_000 
-          : null,
-        updated_at: new Date(),
-      },
-      create: {
-        model: model.id,
-        input_price: parseFloat(p.prompt || '0') * 1_000_000,
-        // ... 其他字段同上
-        updated_at: new Date(),
-      },
-    });
-  }
+-- 发布记录
+CREATE TABLE pricing_releases (
+  version TEXT PRIMARY KEY,
+  status TEXT NOT NULL,                        -- published | rolled_back
+  summary JSONB NOT NULL,
+  operator TEXT NOT NULL,
+  created_at BIGINT NOT NULL
+);
+```
 
-  console.log(`✅ 已同步 ${data.data.length} 个模型价格`);
-}
+## 5. API 规划（MVP）
+- `GET /api/pricing`：读取当前正式价格。
+- `GET /api/pricing/draft`：读取草稿价格。
+- `PUT /api/pricing/draft`：新增/更新草稿项。
+- `POST /api/pricing/preview`：返回影响范围、变更摘要、预计毛利变化。
+- `POST /api/pricing/publish`：原子发布草稿到正式表，生成 `version`。
+- `POST /api/pricing/rollback/:version`：回滚到指定版本。
 
-syncPricesFromOpenRouter();
+## 6. 开发分期
+### Phase A（先落地）
+- 数据表与后端 CRUD + preview/publish/rollback。
+- 定价中心 L1 页面（全局价编辑 + 发布）。
+- Gateway 读取正式价并按优先级结算。
 
-定时任务：用 node-cron 或 Vercel Cron / Railway Cron 每天 00:00 和 12:00 执行一次。
-注意：OpenRouter 返回的价格单位是每 token，所以要乘 1,000,000 转成每百万 token（和 new-api、OpenAI 官方一致）。
+### Phase B
+- 批量规则引擎（前缀/Provider 条件）。
+- 变更影响分析增强（毛利、命中分布）。
+
+### Phase C
+- 灰度发布、审批流、xtrace 发布事件联动。
+
+## 7. 验收标准
+- 任一模型可在 1 分钟内完成“改价->预览->发布”。
+- 价格缺失请求严格 reject，且错误信息可追踪。
+- 任一发布版本可一键回滚，回滚后新请求立即生效。
