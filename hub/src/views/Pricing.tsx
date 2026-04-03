@@ -31,6 +31,9 @@ export default function PricingView() {
   const [cacheReadPrice, setCacheReadPrice] = React.useState('');
   const [cacheWritePrice, setCacheWritePrice] = React.useState('');
   const [preview, setPreview] = React.useState<any>(null);
+  const [newProviderId, setNewProviderId] = React.useState('');
+  const [newProviderKey, setNewProviderKey] = React.useState('');
+  const [creatingProvider, setCreatingProvider] = React.useState(false);
   const providerDropdownRef = React.useRef<HTMLDivElement | null>(null);
 
   const loadDraft = React.useCallback(async () => {
@@ -105,12 +108,62 @@ export default function PricingView() {
     await handlePreview();
   };
 
+  const createProviderAccount = async () => {
+    const provider = newProviderId.trim().toLowerCase();
+    const key = newProviderKey.trim();
+    if (!provider || !key) return;
+    setCreatingProvider(true);
+    try {
+      await apiPut(`/api/provider-keys/${encodeURIComponent(provider)}`, {
+        key,
+        status: 'active',
+      });
+      setNewProviderId('');
+      setNewProviderKey('');
+      await loadProviders();
+      setProviderAccountId(provider);
+    } finally {
+      setCreatingProvider(false);
+    }
+  };
+
   return (
     <div className="max-w-6xl space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Pricing Center</h1>
         <p className="text-gray-500 mt-1">Provider-bound pricing only: each price must be attached to a specific provider account.</p>
       </div>
+
+      {providers.length === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 space-y-4">
+          <h2 className="text-sm font-bold uppercase tracking-widest text-amber-700">Create provider account first</h2>
+          <p className="text-sm text-amber-800">
+            Pricing requires at least one provider account. Create one here (same as Settings → Provider Keys), then continue pricing.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <input
+              value={newProviderId}
+              onChange={(e) => setNewProviderId(e.target.value)}
+              placeholder="provider id (e.g. openai)"
+              className="px-3 py-2 border rounded-lg bg-white"
+            />
+            <input
+              value={newProviderKey}
+              onChange={(e) => setNewProviderKey(e.target.value)}
+              placeholder="provider api key"
+              className="px-3 py-2 border rounded-lg bg-white"
+              type="password"
+            />
+            <button
+              onClick={createProviderAccount}
+              disabled={creatingProvider || !newProviderId.trim() || !newProviderKey.trim()}
+              className="bg-black text-white rounded-lg px-4 py-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {creatingProvider ? 'Creating...' : 'Create Provider'}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white border border-gray-100 rounded-2xl p-6 space-y-4">
         <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Quick Price Editor</h2>
@@ -120,12 +173,14 @@ export default function PricingView() {
             onChange={(e) => setModel(e.target.value)}
             placeholder="model id (e.g. openai/gpt-4o)"
             className="px-3 py-2 border rounded-lg"
+            disabled={providers.length === 0}
           />
           <div className="relative" ref={providerDropdownRef}>
             <button
               type="button"
               onClick={() => setProviderDropdownOpen((v) => !v)}
-              className="w-full flex items-center justify-between px-3 py-2.5 border border-zinc-200 bg-white rounded-lg text-sm font-medium text-zinc-800 shadow-sm hover:border-zinc-300 focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black transition-all"
+              disabled={providers.length === 0}
+              className="w-full flex items-center justify-between px-3 py-2.5 border border-zinc-200 bg-white rounded-lg text-sm font-medium text-zinc-800 shadow-sm hover:border-zinc-300 focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span>{providerAccountId || 'Select provider account (required)'}</span>
               <ChevronDown size={16} className={`text-zinc-400 transition-transform ${providerDropdownOpen ? 'rotate-180' : ''}`} />
@@ -160,24 +215,28 @@ export default function PricingView() {
             onChange={(e) => setInputPrice(e.target.value)}
             placeholder="input price / 1M"
             className="px-3 py-2 border rounded-lg"
+            disabled={providers.length === 0}
           />
           <input
             value={outputPrice}
             onChange={(e) => setOutputPrice(e.target.value)}
             placeholder="output price / 1M"
             className="px-3 py-2 border rounded-lg"
+            disabled={providers.length === 0}
           />
           <input
             value={cacheReadPrice}
             onChange={(e) => setCacheReadPrice(e.target.value)}
             placeholder="cache read price / 1M (optional)"
             className="px-3 py-2 border rounded-lg"
+            disabled={providers.length === 0}
           />
           <input
             value={cacheWritePrice}
             onChange={(e) => setCacheWritePrice(e.target.value)}
             placeholder="cache write price / 1M (optional)"
             className="px-3 py-2 border rounded-lg"
+            disabled={providers.length === 0}
           />
           <button
             onClick={saveDraft}
