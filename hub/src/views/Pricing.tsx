@@ -33,6 +33,7 @@ type ProviderKeyRow = {
 
 type PricingTableRow = PricingRow & {
   status: 'Draft' | 'Published';
+  operational_status?: string | null;
 };
 
 type PricingPreview = {
@@ -121,6 +122,16 @@ export default function PricingView() {
   const [latencyMs, setLatencyMs] = React.useState('');
   const [isTopProvider, setIsTopProvider] = React.useState(false);
   const [markupRate, setMarkupRate] = React.useState('');
+  const [providerDrawerOpen, setProviderDrawerOpen] = React.useState(false);
+  const [providerSaving, setProviderSaving] = React.useState(false);
+  const [newProvider, setNewProvider] = React.useState({
+    provider: 'openai',
+    label: 'OpenAI',
+    base_url: 'https://api.openai.com/v1',
+    docs_url: 'https://platform.openai.com/docs',
+    key: '',
+    status: 'active',
+  });
 
   const [preview, setPreview] = React.useState<PricingPreview | null>(null);
   const [releases, setReleases] = React.useState<PricingRelease[]>([]);
@@ -224,6 +235,24 @@ export default function PricingView() {
     }
   };
 
+  const saveProvider = async () => {
+    const provider = newProvider.provider.trim().toLowerCase();
+    if (!provider || !newProvider.key.trim()) return;
+    setProviderSaving(true);
+    try {
+      await apiPut(`/api/provider-keys/${encodeURIComponent(provider)}`, {
+        ...newProvider,
+        provider,
+      });
+      setProviderDrawerOpen(false);
+      setProviderAccountId(provider);
+      setNewProvider((prev) => ({...prev, provider, key: ''}));
+      await loadAll();
+    } finally {
+      setProviderSaving(false);
+    }
+  };
+
   const deleteDraft = async (row: PricingTableRow) => {
     if (row.status !== 'Draft') return;
     const params = new URLSearchParams({model: row.model});
@@ -268,8 +297,8 @@ export default function PricingView() {
   const tableRows = React.useMemo(() => {
     const draftMap = new Set(draft.map((r) => rowKey(r)));
     const merged: PricingTableRow[] = [
-      ...draft.map((r) => ({...r, status: 'Draft' as const})),
-      ...published.filter((r) => !draftMap.has(rowKey(r))).map((r) => ({...r, status: 'Published' as const})),
+      ...draft.map((r) => ({...r, operational_status: r.status, status: 'Draft' as const})),
+      ...published.filter((r) => !draftMap.has(rowKey(r))).map((r) => ({...r, operational_status: r.status, status: 'Published' as const})),
     ];
 
     const lowerSearch = search.trim().toLowerCase();
@@ -388,15 +417,15 @@ export default function PricingView() {
 
           <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => navigate('/providers')}
+              onClick={() => setProviderDrawerOpen(true)}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-zinc-200 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
             >
-              <Plus size={14} /> Provider
+              <Plus size={14} /> + Provider
             </button>
             <button
               onClick={() => {
                 if (!hasProviders) {
-                  navigate('/providers');
+                  setProviderDrawerOpen(true);
                   return;
                 }
                 openCreateDrawer('quick');
@@ -409,7 +438,7 @@ export default function PricingView() {
             <button
               onClick={() => {
                 if (!hasProviders) {
-                  navigate('/providers');
+                  setProviderDrawerOpen(true);
                   return;
                 }
                 openCreateDrawer('batch');
@@ -453,7 +482,9 @@ export default function PricingView() {
                 <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('provider')}>Provider Account</th>
                 <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('input')}>Input $/1M</th>
                 <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('output')}>Output $/1M</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('final')}>Final Price</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('final')}>
+                  <span title="Global × Markup = Final">Final Price</span>
+                </th>
                 <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Reasoning</th>
                 <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Context</th>
                 <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Latency</th>
@@ -476,11 +507,9 @@ export default function PricingView() {
                       'No pricing configured yet. Create your first price.'
                     ) : (
                       <span>
-                        No Provider Account found yet.
+                        No Provider Account yet.
                         <br />
-                        Pricing requires at least one Provider Account.
-                        <br />
-                        Click <span className="font-semibold">+ Provider</span> in the toolbar to get started.
+                        Click <span className="font-semibold">+ Provider</span> in the toolbar to enable pricing.
                       </span>
                     )}
                   </td>
@@ -497,7 +526,13 @@ export default function PricingView() {
                     <td className="px-4 py-3 text-sm font-mono text-zinc-800">{fmtPrice(row.input_price)}</td>
                     <td className="px-4 py-3 text-sm font-mono text-zinc-800">{fmtPrice(row.output_price)}</td>
                     <td className="px-4 py-3 text-sm font-mono font-semibold text-zinc-900">
-                      {row.price_mode === 'markup' ? fmtMarkup(row.markup_rate) : fmtPrice(getFinalPrice(row))}
+                      <span title={row.price_mode === 'markup' ? 'Global × Markup = Final' : 'Final effective price'}>
+                        {(() => {
+                          const finalPrice = getFinalPrice(row);
+                          if (typeof finalPrice === 'number') return fmtPrice(finalPrice);
+                          return row.price_mode === 'markup' ? fmtMarkup(row.markup_rate) : '-';
+                        })()}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-sm font-mono text-zinc-700">{fmtPrice(row.reasoning_price)}</td>
                     <td className="px-4 py-3 text-sm text-zinc-700">{fmtNum(row.context_length)}</td>
@@ -505,9 +540,35 @@ export default function PricingView() {
                     <td className="px-4 py-3 text-sm font-mono text-zinc-600">{fmtPrice(row.cache_read_price)}</td>
                     <td className="px-4 py-3 text-sm font-mono text-zinc-600">{fmtPrice(row.cache_write_price)}</td>
                     <td className="px-4 py-3 text-sm">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${row.status === 'Published' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
-                        {row.status}
-                      </span>
+                      {(() => {
+                        const operationalStatus = (row.operational_status || '').toLowerCase();
+                        if (row.status === 'Draft') {
+                          return (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                              Draft
+                            </span>
+                          );
+                        }
+                        if (operationalStatus === 'offline' || operationalStatus === 'rate_limited') {
+                          return (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-50 text-red-700 border border-red-200">
+                              {operationalStatus === 'rate_limited' ? 'Rate Limited' : 'Offline'}
+                            </span>
+                          );
+                        }
+                        if (operationalStatus === 'deprecated') {
+                          return (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-zinc-100 text-zinc-600 border border-zinc-200">
+                              Deprecated
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            {operationalStatus === 'online' ? 'Online' : 'Published'}
+                          </span>
+                        );
+                      })()}
                       {row.is_top_provider && (
                         <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border border-blue-200 bg-blue-50 text-blue-700">
                           Top
@@ -594,6 +655,63 @@ export default function PricingView() {
             </div>
           </div>
         </div>
+      )}
+
+      {providerDrawerOpen && (
+        <>
+          <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setProviderDrawerOpen(false)} />
+          <aside className="fixed top-0 right-0 h-full w-full max-w-[480px] bg-white border-l border-zinc-200 shadow-2xl z-50 flex flex-col">
+            <div className="px-5 py-4 border-b flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-lg">New Provider</h3>
+                <p className="text-xs text-zinc-500 mt-0.5">Create provider account for pricing bindings.</p>
+              </div>
+              <button onClick={() => setProviderDrawerOpen(false)} className="p-2 rounded-md hover:bg-zinc-100"><X size={18} /></button>
+            </div>
+            <div className="flex-1 overflow-auto px-5 py-4 space-y-3">
+              <input
+                value={newProvider.provider}
+                onChange={(e) => setNewProvider({...newProvider, provider: e.target.value})}
+                placeholder="provider id (e.g. openai)"
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+              <input
+                value={newProvider.label}
+                onChange={(e) => setNewProvider({...newProvider, label: e.target.value})}
+                placeholder="provider name"
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+              <input
+                value={newProvider.base_url}
+                onChange={(e) => setNewProvider({...newProvider, base_url: e.target.value})}
+                placeholder="base url"
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+              <input
+                value={newProvider.docs_url}
+                onChange={(e) => setNewProvider({...newProvider, docs_url: e.target.value})}
+                placeholder="docs url"
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+              <input
+                type="password"
+                value={newProvider.key}
+                onChange={(e) => setNewProvider({...newProvider, key: e.target.value})}
+                placeholder="api key"
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+            </div>
+            <div className="border-t px-5 py-4 bg-white">
+              <button
+                onClick={saveProvider}
+                disabled={providerSaving || !newProvider.provider.trim() || !newProvider.key.trim()}
+                className="w-full bg-black text-white rounded-lg px-4 py-2 font-semibold disabled:opacity-50"
+              >
+                {providerSaving ? 'Saving...' : 'Save Provider'}
+              </button>
+            </div>
+          </aside>
+        </>
       )}
 
       {drawerOpen && (
