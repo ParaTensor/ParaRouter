@@ -11,8 +11,13 @@ type PricingRow = {
   output_price?: number | null;
   cache_read_price?: number | null;
   cache_write_price?: number | null;
+  reasoning_price?: number | null;
   markup_rate?: number | null;
   currency: string;
+  context_length?: number | null;
+  latency_ms?: number | null;
+  is_top_provider?: boolean | null;
+  status?: string;
   updated_at?: number;
 };
 
@@ -43,7 +48,7 @@ type PricingRelease = {
   created_at: number;
 };
 
-type SortKey = 'model' | 'provider' | 'input' | 'output' | 'status' | 'updated';
+type SortKey = 'model' | 'provider' | 'input' | 'output' | 'final' | 'status' | 'updated';
 
 type PriceRange = 'all' | 'lt1' | '1to10' | 'gte10';
 
@@ -54,6 +59,25 @@ const rowKey = (row: {model: string; provider_account_id?: string | null}) => `$
 const numberText = (value?: number | null) => (typeof value === 'number' ? String(value) : '');
 
 const fmtPrice = (value?: number | null) => (typeof value === 'number' ? `$${value.toFixed(2)}` : '-');
+const fmtNum = (value?: number | null) => (typeof value === 'number' ? String(value) : '-');
+const fmtLatency = (value?: number | null) => (typeof value === 'number' ? `${value}ms` : '-');
+
+const fmtMarkup = (value?: number | null) => {
+  if (typeof value !== 'number') return '-';
+  const percent = value > 1 ? value : value * 100;
+  return `+${percent.toFixed(2)}%`;
+};
+
+const getFinalPrice = (row: Pick<PricingRow, 'price_mode' | 'input_price' | 'output_price' | 'markup_rate'>) => {
+  if (row.price_mode === 'fixed') {
+    return typeof row.output_price === 'number' ? row.output_price : row.input_price ?? null;
+  }
+  if (typeof row.markup_rate === 'number') {
+    const base = typeof row.output_price === 'number' ? row.output_price : row.input_price;
+    if (typeof base === 'number') return base * (1 + row.markup_rate);
+  }
+  return null;
+};
 
 const fmtAge = (ts?: number) => {
   if (!ts) return '-';
@@ -92,11 +116,16 @@ export default function PricingView() {
   const [outputPrice, setOutputPrice] = React.useState('');
   const [cacheReadPrice, setCacheReadPrice] = React.useState('');
   const [cacheWritePrice, setCacheWritePrice] = React.useState('');
+  const [reasoningPrice, setReasoningPrice] = React.useState('');
+  const [contextLength, setContextLength] = React.useState('');
+  const [latencyMs, setLatencyMs] = React.useState('');
+  const [isTopProvider, setIsTopProvider] = React.useState(false);
   const [markupRate, setMarkupRate] = React.useState('');
 
   const [preview, setPreview] = React.useState<PricingPreview | null>(null);
   const [releases, setReleases] = React.useState<PricingRelease[]>([]);
   const [showHistory, setShowHistory] = React.useState(false);
+  const [historyTarget, setHistoryTarget] = React.useState<{model: string; provider: string} | null>(null);
 
   const loadAll = React.useCallback(async () => {
     setLoading(true);
@@ -131,6 +160,10 @@ export default function PricingView() {
     setOutputPrice('');
     setCacheReadPrice('');
     setCacheWritePrice('');
+    setReasoningPrice('');
+    setContextLength('');
+    setLatencyMs('');
+    setIsTopProvider(false);
     setMarkupRate('');
     setShowCacheFields(false);
     setDrawerOpen(true);
@@ -145,6 +178,10 @@ export default function PricingView() {
     setOutputPrice(numberText(row.output_price));
     setCacheReadPrice(numberText(row.cache_read_price));
     setCacheWritePrice(numberText(row.cache_write_price));
+    setReasoningPrice(numberText(row.reasoning_price));
+    setContextLength(numberText(row.context_length));
+    setLatencyMs(numberText(row.latency_ms));
+    setIsTopProvider(Boolean(row.is_top_provider));
     setMarkupRate(numberText(row.markup_rate));
     setShowCacheFields(Boolean(row.cache_read_price || row.cache_write_price));
     setDrawerOpen(true);
@@ -157,6 +194,11 @@ export default function PricingView() {
       provider_account_id: providerAccountId,
       price_mode: mode,
       currency: 'USD',
+      context_length: contextLength ? Number(contextLength) : null,
+      latency_ms: latencyMs ? Number(latencyMs) : null,
+      reasoning_price: reasoningPrice ? Number(reasoningPrice) : null,
+      status: 'online',
+      is_top_provider: isTopProvider,
     };
 
     if (!payload.model || !providerAccountId) return;
@@ -212,13 +254,16 @@ export default function PricingView() {
     }
   };
 
-  const toggleHistory = async () => {
-    if (!showHistory) {
+  const openHistory = async (row: PricingTableRow) => {
+    if (releases.length === 0) {
       const rows = await apiGet<PricingRelease[]>('/api/pricing/releases?limit=8');
       setReleases(rows);
     }
-    setShowHistory((v) => !v);
+    setHistoryTarget({model: row.model, provider: row.provider_account_id || '-'});
+    setShowHistory(true);
   };
+
+  const closeHistory = () => setShowHistory(false);
 
   const tableRows = React.useMemo(() => {
     const draftMap = new Set(draft.map((r) => rowKey(r)));
@@ -259,6 +304,7 @@ export default function PricingView() {
       if (sortKey === 'status') return direction * a.status.localeCompare(b.status);
       if (sortKey === 'input') return direction * ((a.input_price || 0) - (b.input_price || 0));
       if (sortKey === 'output') return direction * ((a.output_price || 0) - (b.output_price || 0));
+      if (sortKey === 'final') return direction * ((getFinalPrice(a) || 0) - (getFinalPrice(b) || 0));
       return direction * ((a.updated_at || 0) - (b.updated_at || 0));
     });
   }, [draft, published, search, providerFilter, statusFilter, priceRange, sortKey, sortDesc]);
@@ -342,32 +388,45 @@ export default function PricingView() {
 
           <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => navigate('/settings?tab=provider-keys')}
+              onClick={() => navigate('/providers')}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-zinc-200 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
             >
               <Plus size={14} /> Provider
             </button>
             <button
-              onClick={() => openCreateDrawer('quick')}
-              className="inline-flex items-center gap-1.5 bg-black text-white rounded-lg px-3.5 py-2 text-sm font-semibold disabled:opacity-50"
-              disabled={!hasProviders}
+              onClick={() => {
+                if (!hasProviders) {
+                  navigate('/providers');
+                  return;
+                }
+                openCreateDrawer('quick');
+              }}
+              className={`inline-flex items-center gap-1.5 bg-black text-white rounded-lg px-3.5 py-2 text-sm font-semibold ${!hasProviders ? 'opacity-70' : ''}`}
               title={!hasProviders ? 'Create a Provider Account first' : undefined}
             >
               <Plus size={14} /> New Price
             </button>
             <button
-              onClick={() => openCreateDrawer('batch')}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-zinc-200 text-sm font-semibold hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={!hasProviders}
+              onClick={() => {
+                if (!hasProviders) {
+                  navigate('/providers');
+                  return;
+                }
+                openCreateDrawer('batch');
+              }}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-zinc-200 text-sm font-semibold hover:bg-zinc-50 ${!hasProviders ? 'opacity-70' : ''}`}
               title={!hasProviders ? 'Create a Provider Account first' : undefined}
             >
               <SlidersHorizontal size={14} /> Batch Rules
             </button>
             <button
               onClick={() => setStatusFilter((v) => (v === 'draft' ? 'all' : 'draft'))}
-              className={`px-3.5 py-2 rounded-lg border text-sm font-semibold ${draftOnly ? 'border-black text-black' : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50'}`}
+              className={`px-3.5 py-2 rounded-lg border text-sm font-semibold inline-flex items-center gap-1.5 ${draftOnly ? 'border-amber-300 text-amber-800 bg-amber-50' : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50'}`}
             >
-              Drafts <span className="ml-1 text-xs text-zinc-500">{draft.length}</span>
+              Drafts
+              <span className={`inline-flex min-w-5 justify-center rounded-full px-1.5 py-0.5 text-[11px] font-bold ${draft.length > 0 ? 'bg-amber-100 text-amber-700' : 'bg-zinc-100 text-zinc-500'}`}>
+                {draft.length}
+              </span>
             </button>
           </div>
         </div>
@@ -394,6 +453,10 @@ export default function PricingView() {
                 <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('provider')}>Provider Account</th>
                 <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('input')}>Input $/1M</th>
                 <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('output')}>Output $/1M</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('final')}>Final Price</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Reasoning</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Context</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Latency</th>
                 <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Cache Read</th>
                 <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Cache Write</th>
                 <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('status')}>Status</th>
@@ -404,11 +467,11 @@ export default function PricingView() {
             <tbody className="divide-y">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-zinc-400 text-sm">Loading pricing...</td>
+                  <td colSpan={13} className="px-4 py-12 text-center text-zinc-400 text-sm">Loading pricing...</td>
                 </tr>
               ) : pagedRows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-zinc-400 text-sm">
+                  <td colSpan={13} className="px-4 py-12 text-center text-zinc-400 text-sm">
                     {hasProviders ? (
                       'No pricing configured yet. Create your first price.'
                     ) : (
@@ -425,23 +488,38 @@ export default function PricingView() {
               ) : (
                 pagedRows.map((row) => (
                   <tr key={`${row.status}:${rowKey(row)}`} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-4 py-3 text-sm font-semibold text-zinc-900">{row.model}</td>
+                    <td className="px-4 py-3 text-sm font-semibold text-zinc-900">
+                      <button onClick={() => navigate(`/models/${encodeURIComponent(row.model)}/providers`)} className="hover:underline underline-offset-2">
+                        {row.model}
+                      </button>
+                    </td>
                     <td className="px-4 py-3 text-sm text-zinc-600">{row.provider_account_id || '-'}</td>
                     <td className="px-4 py-3 text-sm font-mono text-zinc-800">{fmtPrice(row.input_price)}</td>
                     <td className="px-4 py-3 text-sm font-mono text-zinc-800">{fmtPrice(row.output_price)}</td>
+                    <td className="px-4 py-3 text-sm font-mono font-semibold text-zinc-900">
+                      {row.price_mode === 'markup' ? fmtMarkup(row.markup_rate) : fmtPrice(getFinalPrice(row))}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-mono text-zinc-700">{fmtPrice(row.reasoning_price)}</td>
+                    <td className="px-4 py-3 text-sm text-zinc-700">{fmtNum(row.context_length)}</td>
+                    <td className="px-4 py-3 text-sm text-zinc-700">{fmtLatency(row.latency_ms)}</td>
                     <td className="px-4 py-3 text-sm font-mono text-zinc-600">{fmtPrice(row.cache_read_price)}</td>
                     <td className="px-4 py-3 text-sm font-mono text-zinc-600">{fmtPrice(row.cache_write_price)}</td>
                     <td className="px-4 py-3 text-sm">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${row.status === 'Published' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
                         {row.status}
                       </span>
+                      {row.is_top_provider && (
+                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border border-blue-200 bg-blue-50 text-blue-700">
+                          Top
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-sm text-zinc-500">{fmtAge(row.updated_at)}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="inline-flex items-center gap-1">
                         <button onClick={() => openEditDrawer(row)} className="px-2 py-1 text-xs font-semibold border rounded hover:bg-white">Edit</button>
                         <button onClick={() => deleteDraft(row)} disabled={row.status !== 'Draft'} className="px-2 py-1 text-xs font-semibold text-red-600 border border-red-200 rounded hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed">Delete</button>
-                        <button onClick={toggleHistory} className="px-2 py-1 text-xs font-semibold border rounded hover:bg-white">History</button>
+                        <button onClick={() => openHistory(row)} className="px-2 py-1 text-xs font-semibold border rounded hover:bg-white">History</button>
                       </div>
                     </td>
                   </tr>
@@ -476,8 +554,11 @@ export default function PricingView() {
       {showHistory && (
         <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-5">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold">Publish History</h3>
-            <button onClick={toggleHistory} className="text-zinc-500 hover:text-black"><X size={16} /></button>
+            <div>
+              <h3 className="font-semibold">Publish History</h3>
+              {historyTarget && <p className="text-xs text-zinc-500 mt-0.5">{historyTarget.model} • {historyTarget.provider}</p>}
+            </div>
+            <button onClick={closeHistory} className="text-zinc-500 hover:text-black"><X size={16} /></button>
           </div>
           <div className="mt-3 space-y-2">
             {releases.length === 0 ? (
@@ -583,6 +664,25 @@ export default function PricingView() {
                       </div>
                     </div>
                   )}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Reasoning $/1M</label>
+                      <input value={reasoningPrice} onChange={(e) => setReasoningPrice(e.target.value)} type="number" min="0" step="0.000001" className="w-full px-3 py-2 border rounded-lg" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Context Length</label>
+                      <input value={contextLength} onChange={(e) => setContextLength(e.target.value)} type="number" min="0" step="1" className="w-full px-3 py-2 border rounded-lg" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Latency (ms)</label>
+                    <input value={latencyMs} onChange={(e) => setLatencyMs(e.target.value)} type="number" min="0" step="1" className="w-full px-3 py-2 border rounded-lg" />
+                  </div>
+                  <label className="inline-flex items-center gap-2 text-sm text-zinc-700">
+                    <input type="checkbox" checked={isTopProvider} onChange={(e) => setIsTopProvider(e.target.checked)} />
+                    Top provider for this model
+                  </label>
                 </>
               )}
 
@@ -631,6 +731,15 @@ export default function PricingView() {
                       <input value={outputPrice} onChange={(e) => setOutputPrice(e.target.value)} type="number" step="0.000001" placeholder="output /1M" className="px-3 py-2 border rounded-lg" />
                     </div>
                   )}
+                  <div className="grid grid-cols-3 gap-3">
+                    <input value={reasoningPrice} onChange={(e) => setReasoningPrice(e.target.value)} type="number" step="0.000001" placeholder="reasoning /1M" className="px-3 py-2 border rounded-lg" />
+                    <input value={contextLength} onChange={(e) => setContextLength(e.target.value)} type="number" step="1" placeholder="context length" className="px-3 py-2 border rounded-lg" />
+                    <input value={latencyMs} onChange={(e) => setLatencyMs(e.target.value)} type="number" step="1" placeholder="latency ms" className="px-3 py-2 border rounded-lg" />
+                  </div>
+                  <label className="inline-flex items-center gap-2 text-sm text-zinc-700">
+                    <input type="checkbox" checked={isTopProvider} onChange={(e) => setIsTopProvider(e.target.checked)} />
+                    Top provider for this model
+                  </label>
                 </div>
               )}
 

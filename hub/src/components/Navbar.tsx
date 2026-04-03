@@ -1,5 +1,5 @@
 import React from 'react';
-import {Menu, X, ChevronDown, Key, Settings, LogOut, Activity, LayoutGrid, BarChart3, MessageSquare, BookOpen, Server, BadgeDollarSign} from 'lucide-react';
+import {Menu, X, ChevronDown, Key, Settings, LogOut, Activity, LayoutGrid, BarChart3, MessageSquare, BookOpen, Server, BadgeDollarSign, PlugZap} from 'lucide-react';
 import {cn} from '../lib/utils';
 import {localUser} from '../lib/session';
 import {Link, useLocation, useNavigate} from 'react-router-dom';
@@ -18,6 +18,7 @@ export default function Navbar() {
     {id: '/rankings', label: 'Rankings', icon: BarChart3},
     {id: '/activity', label: 'Activity', icon: Activity},
     {id: '/pricing', label: 'Pricing', icon: BadgeDollarSign},
+    {id: '/providers', label: 'Providers', icon: PlugZap},
     {id: '/chat', label: 'Chat', icon: MessageSquare},
     {id: '/docs', label: 'Docs', icon: BookOpen},
     {id: '/hub', label: 'Hub', icon: Server},

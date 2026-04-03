@@ -8,6 +8,8 @@ import DocsView from './views/Docs';
 import RankingsView from './views/Rankings';
 import HubConsoleView from './views/HubConsole';
 import PricingView from './views/Pricing';
+import ProvidersView from './views/Providers';
+import ModelProvidersView from './views/ModelProviders';
 import {motion, AnimatePresence} from 'motion/react';
 import {Link, Navigate, Route, Routes, useLocation} from 'react-router-dom';
 
@@ -34,6 +36,8 @@ export default function App() {
                 <Route path="/rankings" element={<RankingsView />} />
                 <Route path="/activity" element={<ActivityView />} />
                 <Route path="/pricing" element={<PricingView />} />
+                <Route path="/providers" element={<ProvidersView />} />
+                <Route path="/models/:modelId/providers" element={<ModelProvidersView />} />
                 <Route path="/chat" element={<ChatView />} />
                 <Route path="/docs" element={<DocsView />} />
                 <Route path="/hub" element={<HubConsoleView />} />
