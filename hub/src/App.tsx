@@ -1,4 +1,3 @@
-import React from 'react';
 import Navbar from './components/Navbar';
 import ModelsView from './views/Models';
 import KeysView from './views/Keys';
@@ -10,50 +9,38 @@ import RankingsView from './views/Rankings';
 import HubConsoleView from './views/HubConsole';
 import PricingView from './views/Pricing';
 import {motion, AnimatePresence} from 'motion/react';
+import {Link, Navigate, Route, Routes, useLocation} from 'react-router-dom';
 
 export default function App() {
-  const [activeTab, setActiveTab] = React.useState('models');
-
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'models':
-        return <ModelsView />;
-      case 'keys':
-        return <KeysView />;
-      case 'activity':
-        return <ActivityView />;
-      case 'settings':
-        return <SettingsView />;
-      case 'chat':
-        return <ChatView />;
-      case 'pricing':
-        return <PricingView />;
-      case 'docs':
-        return <DocsView />;
-      case 'rankings':
-        return <RankingsView />;
-      case 'hub':
-        return <HubConsoleView />;
-      default:
-        return <ModelsView />;
-    }
-  };
+  const location = useLocation();
 
   return (
     <div className="min-h-screen bg-[#fafafa] text-black font-sans selection:bg-black selection:text-white">
-      <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Navbar />
 
       <main className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="wait" initial={false}>
             <motion.div
-              key={activeTab}
+              key={location.pathname}
               initial={{opacity: 0, y: 10}}
               animate={{opacity: 1, y: 0}}
               exit={{opacity: 0, y: -10}}
               transition={{duration: 0.2, ease: 'easeOut'}}
             >
-              {renderContent()}
+              <Routes location={location}>
+                <Route path="/" element={<Navigate to="/models" replace />} />
+                <Route path="/models" element={<ModelsView />} />
+                <Route path="/rankings" element={<RankingsView />} />
+                <Route path="/activity" element={<ActivityView />} />
+                <Route path="/pricing" element={<PricingView />} />
+                <Route path="/chat" element={<ChatView />} />
+                <Route path="/docs" element={<DocsView />} />
+                <Route path="/hub" element={<HubConsoleView />} />
+                <Route path="/keys" element={<KeysView />} />
+                <Route path="/settings" element={<SettingsView />} />
+                <Route path="*" element={<Navigate to="/models" replace />} />
+              </Routes>
             </motion.div>
           </AnimatePresence>
         </div>
@@ -77,10 +64,10 @@ export default function App() {
             <div>
               <h4 className="font-bold text-sm mb-4 uppercase tracking-widest text-gray-400">Product</h4>
               <ul className="space-y-2 text-sm text-gray-600">
-                <li><a href="#" className="hover:text-black transition-colors">Models</a></li>
-                <li><a href="#" className="hover:text-black transition-colors">Rankings</a></li>
-                <li><a href="#" className="hover:text-black transition-colors">Pricing</a></li>
-                <li><a href="#" className="hover:text-black transition-colors">Chat</a></li>
+                <li><Link to="/models" className="hover:text-black transition-colors">Models</Link></li>
+                <li><Link to="/rankings" className="hover:text-black transition-colors">Rankings</Link></li>
+                <li><Link to="/pricing" className="hover:text-black transition-colors">Pricing</Link></li>
+                <li><Link to="/chat" className="hover:text-black transition-colors">Chat</Link></li>
               </ul>
             </div>
 

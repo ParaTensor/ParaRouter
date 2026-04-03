@@ -3,8 +3,10 @@ import {User, CreditCard, Shield, Sliders, Webhook, AlertTriangle, Save, Trendin
 import {cn} from '../lib/utils';
 import {apiDelete, apiGet, apiPut} from '../lib/api';
 import {localUser} from '../lib/session';
+import {useSearchParams} from 'react-router-dom';
 
 export default function SettingsView() {
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = React.useState('profile');
   const isAdmin = localUser.role === 'admin';
   const [providerKeys, setProviderKeys] = React.useState<any[]>([]);
@@ -44,14 +46,25 @@ export default function SettingsView() {
     }
   };
 
-  const tabs = [
-    {id: 'profile', label: 'Profile', icon: User},
-    {id: 'billing', label: 'Billing', icon: CreditCard},
-    {id: 'routing', label: 'Routing', icon: Sliders},
-    {id: 'integrations', label: 'Integrations', icon: Webhook},
-    {id: 'security', label: 'Security', icon: Shield},
-    ...(isAdmin ? [{id: 'provider-keys', label: 'Provider Keys', icon: Shield}] : []),
-  ];
+  const tabs = React.useMemo(
+    () => [
+      {id: 'profile', label: 'Profile', icon: User},
+      {id: 'billing', label: 'Billing', icon: CreditCard},
+      {id: 'routing', label: 'Routing', icon: Sliders},
+      {id: 'integrations', label: 'Integrations', icon: Webhook},
+      {id: 'security', label: 'Security', icon: Shield},
+      ...(isAdmin ? [{id: 'provider-keys', label: 'Provider Keys', icon: Shield}] : []),
+    ],
+    [isAdmin],
+  );
+
+  React.useEffect(() => {
+    const requestedTab = searchParams.get('tab');
+    if (!requestedTab) return;
+    if (tabs.some((tab) => tab.id === requestedTab)) {
+      setActiveTab(requestedTab);
+    }
+  }, [searchParams, tabs]);
 
   return (
     <div className="max-w-5xl space-y-8">
