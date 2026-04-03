@@ -611,27 +611,19 @@ impl DatabasePool {
         let state = self.get_pricing_state().await?;
         match self {
             Self::Postgres(pool) => {
-                if let Some(provider_id) = provider_account_id {
-                    if let Some(record) = sqlx::query_as::<_, PricingRecord>(
-                        "SELECT model, NULLIF(provider_account_id, '') AS provider_account_id, price_mode, input_price, output_price, cache_read_price, cache_write_price, markup_rate, currency, version, updated_at FROM model_pricings WHERE model = $1 AND provider_account_id = $2 AND version = $3",
-                    )
-                    .bind(model)
-                    .bind(provider_id)
-                    .bind(&state.current_version)
-                    .fetch_optional(pool)
-                    .await?
-                    {
-                        return Ok(Some(record));
-                    }
-                }
-                let global = sqlx::query_as::<_, PricingRecord>(
-                    "SELECT model, NULLIF(provider_account_id, '') AS provider_account_id, price_mode, input_price, output_price, cache_read_price, cache_write_price, markup_rate, currency, version, updated_at FROM model_pricings WHERE model = $1 AND provider_account_id = '' AND version = $2",
+                let provider_id = match provider_account_id {
+                    Some(v) if !v.trim().is_empty() => v,
+                    _ => return Ok(None),
+                };
+                let record = sqlx::query_as::<_, PricingRecord>(
+                    "SELECT model, NULLIF(provider_account_id, '') AS provider_account_id, price_mode, input_price, output_price, cache_read_price, cache_write_price, markup_rate, currency, version, updated_at FROM model_pricings WHERE model = $1 AND provider_account_id = $2 AND version = $3",
                 )
                 .bind(model)
+                .bind(provider_id)
                 .bind(&state.current_version)
                 .fetch_optional(pool)
                 .await?;
-                Ok(global)
+                Ok(record)
             }
         }
     }

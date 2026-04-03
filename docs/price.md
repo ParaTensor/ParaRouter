@@ -8,7 +8,7 @@
 ## 2. 边界与原则
 - Provider 页面：只管理连接能力与上游成本参数（可选），不编辑对客售价。
 - 定价中心：唯一可写对客售价入口。
-- 结算优先级固定：`provider_account + model 覆写 > global model 价格 > reject`。
+- 结算优先级固定：`provider_account + model 覆写 > reject`（不使用 global fallback）。
 - 禁止“固定价 + markup_rate”同时生效，防止重复加价。
 - 使用显式 `price_mode` 并配合数据库 `CHECK` 约束，避免“魔法值”导致误计费。
 
@@ -31,7 +31,7 @@
 CREATE TABLE model_pricings (
   id BIGSERIAL PRIMARY KEY,
   model TEXT NOT NULL,
-  provider_account_id TEXT NOT NULL DEFAULT '', -- ''=全局，非空=绑定 Provider Account
+  provider_account_id TEXT NOT NULL,            -- 必填，绑定 Provider Account
   price_mode TEXT NOT NULL,                    -- fixed | markup
   input_price DECIMAL(12,6),
   output_price DECIMAL(12,6),
@@ -48,7 +48,7 @@ CREATE TABLE model_pricings (
 CREATE TABLE model_pricings_draft (
   id BIGSERIAL PRIMARY KEY,
   model TEXT NOT NULL,
-  provider_account_id TEXT NOT NULL DEFAULT '',
+  provider_account_id TEXT NOT NULL,            -- 必填，绑定 Provider Account
   price_mode TEXT NOT NULL,
   input_price DECIMAL(12,6),
   output_price DECIMAL(12,6),
@@ -87,6 +87,7 @@ CREATE TABLE pricing_state (
 - `POST /api/pricing/publish`：原子发布草稿到正式表，生成 `version`。
 - `POST /api/pricing/rollback/:version`：回滚到指定版本。
 - `GET /api/pricing/state`：读取当前 `version/config_version`。
+- `PUT /api/pricing/draft` 必须传 `provider_account_id`。
 
 ## 6. 开发分期
 ### Phase A（先落地）

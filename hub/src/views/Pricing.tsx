@@ -23,7 +23,7 @@ export default function PricingView() {
   const [draft, setDraft] = React.useState<PricingRow[]>([]);
   const [providers, setProviders] = React.useState<string[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [scope, setScope] = React.useState<'global' | 'provider'>('global');
+  const [providerDropdownOpen, setProviderDropdownOpen] = React.useState(false);
   const [model, setModel] = React.useState('');
   const [providerAccountId, setProviderAccountId] = React.useState('');
   const [inputPrice, setInputPrice] = React.useState('');
@@ -31,6 +31,7 @@ export default function PricingView() {
   const [cacheReadPrice, setCacheReadPrice] = React.useState('');
   const [cacheWritePrice, setCacheWritePrice] = React.useState('');
   const [preview, setPreview] = React.useState<any>(null);
+  const providerDropdownRef = React.useRef<HTMLDivElement | null>(null);
 
   const loadDraft = React.useCallback(async () => {
     setLoading(true);
@@ -52,12 +53,23 @@ export default function PricingView() {
     loadProviders();
   }, [loadDraft, loadProviders]);
 
+  React.useEffect(() => {
+    const onClickOutside = (event: MouseEvent) => {
+      if (!providerDropdownRef.current) return;
+      if (!providerDropdownRef.current.contains(event.target as Node)) {
+        setProviderDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
+
   const saveDraft = async () => {
     if (!model || !inputPrice || !outputPrice) return;
-    if (scope === 'provider' && !providerAccountId) return;
+    if (!providerAccountId) return;
     await apiPut('/api/pricing/draft', {
       model,
-      provider_account_id: scope === 'provider' ? providerAccountId : undefined,
+      provider_account_id: providerAccountId,
       price_mode: 'fixed',
       input_price: Number(inputPrice),
       output_price: Number(outputPrice),
@@ -67,6 +79,7 @@ export default function PricingView() {
     });
     setModel('');
     setProviderAccountId('');
+    setProviderDropdownOpen(false);
     setInputPrice('');
     setOutputPrice('');
     setCacheReadPrice('');
@@ -96,64 +109,58 @@ export default function PricingView() {
     <div className="max-w-6xl space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Pricing Center</h1>
-        <p className="text-gray-500 mt-1">Bind pricing to global or provider account and configure input/output/cache prices.</p>
+        <p className="text-gray-500 mt-1">Provider-bound pricing only: each price must be attached to a specific provider account.</p>
       </div>
 
       <div className="bg-white border border-gray-100 rounded-2xl p-6 space-y-4">
         <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Quick Price Editor</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <input
             value={model}
             onChange={(e) => setModel(e.target.value)}
             placeholder="model id (e.g. openai/gpt-4o)"
             className="px-3 py-2 border rounded-lg"
           />
-          <div className="flex items-center gap-2 border rounded-lg px-2">
+          <div className="relative" ref={providerDropdownRef}>
             <button
-              onClick={() => setScope('global')}
-              className={`px-2 py-1 text-xs rounded ${scope === 'global' ? 'bg-black text-white' : 'text-zinc-600'}`}
+              type="button"
+              onClick={() => setProviderDropdownOpen((v) => !v)}
+              className="w-full flex items-center justify-between px-3 py-2.5 border border-zinc-200 bg-white rounded-lg text-sm font-medium text-zinc-800 shadow-sm hover:border-zinc-300 focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black transition-all"
             >
-              Global
+              <span>{providerAccountId || 'Select provider account (required)'}</span>
+              <ChevronDown size={16} className={`text-zinc-400 transition-transform ${providerDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
-            <button
-              onClick={() => setScope('provider')}
-              className={`px-2 py-1 text-xs rounded ${scope === 'provider' ? 'bg-black text-white' : 'text-zinc-600'}`}
-            >
-              Provider-bound
-            </button>
+            {providerDropdownOpen && (
+              <div className="absolute z-20 mt-1 w-full max-h-56 overflow-auto rounded-lg border border-zinc-200 bg-white shadow-xl">
+                {providers.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => {
+                      setProviderAccountId(p);
+                      setProviderDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-zinc-50 ${providerAccountId === p ? 'bg-zinc-100 font-semibold' : ''}`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
+        </div>
+        <div className="text-xs text-zinc-500">
+          {providers.length > 0
+            ? 'No global fallback is used. Requests must match provider-bound pricing.'
+            : 'No provider accounts found yet. Add provider keys in Settings first.'}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <input
             value={inputPrice}
             onChange={(e) => setInputPrice(e.target.value)}
             placeholder="input price / 1M"
             className="px-3 py-2 border rounded-lg"
           />
-        </div>
-        {scope === 'provider' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="relative">
-              <select
-                value={providerAccountId}
-                onChange={(e) => setProviderAccountId(e.target.value)}
-                className="w-full appearance-none px-3 py-2.5 border border-zinc-200 bg-white rounded-lg text-sm font-medium text-zinc-800 shadow-sm focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black transition-all"
-              >
-                <option value="">Select provider account</option>
-                {providers.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-            </div>
-            <p className="text-xs text-zinc-500 flex items-center">
-              {providers.length > 0
-                ? 'This price will override global pricing for the selected provider.'
-                : 'No provider accounts found yet. Add provider keys in Settings first.'}
-            </p>
-          </div>
-        )}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <input
             value={outputPrice}
             onChange={(e) => setOutputPrice(e.target.value)}
@@ -172,7 +179,11 @@ export default function PricingView() {
             placeholder="cache write price / 1M (optional)"
             className="px-3 py-2 border rounded-lg"
           />
-          <button onClick={saveDraft} className="bg-black text-white rounded-lg px-4 py-2 font-semibold">
+          <button
+            onClick={saveDraft}
+            disabled={!providerAccountId}
+            className="bg-black text-white rounded-lg px-4 py-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             Save Draft
           </button>
         </div>
@@ -196,7 +207,7 @@ export default function PricingView() {
               <div key={`${row.model}:${row.provider_account_id || 'global'}`} className="flex items-center justify-between border rounded-lg px-3 py-2">
                 <div className="text-sm">
                   <span className="font-semibold">{row.model}</span>
-                  <span className="text-zinc-500 ml-2">{row.provider_account_id || 'global'}</span>
+                  <span className="text-zinc-500 ml-2">{row.provider_account_id || '(missing provider)'}</span>
                   <span className="text-zinc-500 ml-2">
                     {row.price_mode === 'fixed'
                       ? `in ${row.input_price} / out ${row.output_price} / cache-r ${row.cache_read_price ?? '-'} / cache-w ${row.cache_write_price ?? '-'}`

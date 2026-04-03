@@ -122,7 +122,10 @@ pub async fn handle_chat_completions(
     Json(payload): Json<Value>,
 ) -> Response {
     let model = payload.get("model").and_then(Value::as_str);
-    let provider_account_id = payload.get("provider").and_then(Value::as_str);
+    let provider_account_id = payload
+        .get("provider")
+        .and_then(Value::as_str)
+        .or_else(|| payload.get("provider_account_id").and_then(Value::as_str));
     if let Some(model_name) = model {
         match state
             .db_pool
@@ -133,7 +136,7 @@ pub async fn handle_chat_completions(
             Ok(None) => {
                 return error_response(
                     StatusCode::BAD_REQUEST,
-                    format!("pricing_not_found for model {}", model_name),
+                    format!("pricing_not_found for model {} and provider {:?}", model_name, provider_account_id),
                     "pricing_not_found",
                 )
                 .into_response();

@@ -688,6 +688,14 @@ pub async fn put_pricing_draft(
         },
         currency: payload.currency.unwrap_or_else(|| "USD".to_string()),
     };
+    if record.provider_account_id.is_none() {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "provider_account_id required",
+            "invalid_request",
+        )
+        .into_response();
+    }
     match state.db_pool.upsert_pricing_draft(record).await {
         Ok(_) => Json(json!({"status":"saved"})).into_response(),
         Err(err) => error_response(
