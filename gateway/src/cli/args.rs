@@ -15,7 +15,7 @@ pub enum Commands {
     Serve {
         #[arg(short, long, default_value = "0.0.0.0")]
         host: String,
-        #[arg(short, long, default_value_t = 3000)]
+        #[arg(short, long, default_value_t = 8080)]
         port: u16,
     },
 }

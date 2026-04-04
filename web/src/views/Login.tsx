@@ -38,10 +38,33 @@ export default function Login() {
     setError('');
     setMessage('');
     try {
-      const session = await apiPost<AuthSession>('/api/auth/login', {
-        account: account.trim(),
-        password,
-      });
+      const loginAccount = account.trim();
+      let session: AuthSession;
+      try {
+        session = await apiPost<AuthSession>('/api/auth/login', {
+          username: loginAccount,
+          password,
+        });
+      } catch (err) {
+        if (!(err instanceof ApiError) || err.status !== 400) {
+          throw err;
+        }
+        try {
+          session = await apiPost<AuthSession>('/api/auth/login', {
+            account: loginAccount,
+            password,
+          });
+        } catch (fallbackErr) {
+          if (!(fallbackErr instanceof ApiError) || fallbackErr.status !== 400) {
+            throw fallbackErr;
+          }
+          session = await apiPost<AuthSession>('/api/auth/login', {
+            account: loginAccount,
+            username: loginAccount,
+            password,
+          });
+        }
+      }
       setAuthSession(session);
       navigate('/models');
     } catch (err) {

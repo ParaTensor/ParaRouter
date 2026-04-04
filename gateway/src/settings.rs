@@ -17,7 +17,7 @@ impl Default for ServerSettings {
     fn default() -> Self {
         Self {
             host: "0.0.0.0".to_string(),
-            port: 3000,
+            port: 8080,
         }
     }
 }

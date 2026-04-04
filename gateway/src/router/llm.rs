@@ -47,7 +47,7 @@ pub fn build_llm_proxy_routes(
             "/api/version",
             get(|| async {
                 axum::Json(serde_json::json!({
-                    "version": "0.1.0",
+                    "version": env!("CARGO_PKG_VERSION"),
                     "build": "opengateway"
                 }))
             }),

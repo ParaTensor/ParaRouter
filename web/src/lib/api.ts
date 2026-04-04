@@ -1,8 +1,7 @@
 import {getAuthToken} from './session';
 
-const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ||
-  (import.meta.env.DEV ? 'http://127.0.0.1:3000' : '');
+const envApiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '');
+const API_BASE_URL = envApiBaseUrl || '';
 
 function resolveApiUrl(path: string): string {
   if (/^https?:\/\//i.test(path)) return path;
@@ -29,6 +28,14 @@ export class ApiError extends Error {
   }
 }
 
+function extractErrorMessage(responseBody: any): string {
+  if (!responseBody) return '';
+  if (typeof responseBody === 'string') return responseBody;
+  if (typeof responseBody?.error === 'string') return responseBody.error;
+  if (typeof responseBody?.message === 'string') return responseBody.message;
+  return '';
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const url = resolveApiUrl(path);
   const response = await fetch(url, {
@@ -37,13 +44,19 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     body: body == null ? undefined : JSON.stringify(body),
   });
   if (!response.ok) {
-    let responseBody: any = null;
-    try {
-      responseBody = await response.json();
-    } catch {
-      responseBody = await response.text();
+    const rawBody = await response.text();
+    let responseBody: any = rawBody;
+    if (rawBody) {
+      try {
+        responseBody = JSON.parse(rawBody);
+      } catch {
+        responseBody = rawBody;
+      }
+    } else {
+      responseBody = null;
     }
-    throw new ApiError(`${method} ${url} failed: ${response.status}`, response.status, responseBody);
+    const message = extractErrorMessage(responseBody) || `${method} ${url} failed: ${response.status}`;
+    throw new ApiError(message, response.status, responseBody);
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
