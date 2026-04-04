@@ -2,6 +2,7 @@ import React from 'react';
 import {Search, Plus, SlidersHorizontal, X, ChevronRight, ChevronLeft} from 'lucide-react';
 import {apiDelete, apiGet, apiPost, apiPut} from '../lib/api';
 import {useNavigate} from 'react-router-dom';
+import {Select} from '../components/Select';
 
 type PricingRow = {
   model: string;
@@ -131,6 +132,7 @@ export default function PricingView() {
     docs_url: 'https://platform.openai.com/docs',
     key: '',
     status: 'active',
+    driver_type: 'openai_compatible',
   });
 
   const [preview, setPreview] = React.useState<PricingPreview | null>(null);
@@ -178,6 +180,19 @@ export default function PricingView() {
     setMarkupRate('');
     setShowCacheFields(false);
     setDrawerOpen(true);
+  };
+
+  const openProviderDrawer = () => {
+    setNewProvider({
+      provider: '',
+      label: '',
+      base_url: 'https://api.openai.com/v1',
+      docs_url: 'https://platform.openai.com/docs',
+      key: '',
+      status: 'active',
+      driver_type: 'openai_compatible',
+    });
+    setProviderDrawerOpen(true);
   };
 
   const openEditDrawer = (row: PricingTableRow) => {
@@ -246,7 +261,7 @@ export default function PricingView() {
       });
       setProviderDrawerOpen(false);
       setProviderAccountId(provider);
-      setNewProvider((prev) => ({...prev, provider, key: ''}));
+      setNewProvider((prev) => ({...prev, provider, key: '', driver_type: 'openai_compatible'}));
       await loadAll();
     } finally {
       setProviderSaving(false);
@@ -382,69 +397,70 @@ export default function PricingView() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <select
+            <Select
+              className="w-[180px]"
               value={providerFilter}
-              onChange={(e) => setProviderFilter(e.target.value)}
-              className="px-3 py-2 border border-zinc-200 rounded-lg text-sm bg-white"
-            >
-              <option value="all">Provider: All</option>
-              {providers.map((provider) => (
-                <option key={provider} value={provider}>{provider}</option>
-              ))}
-            </select>
+              onChange={(val) => setProviderFilter(val)}
+              options={[
+                { value: 'all', label: 'Provider: All' },
+                ...providers.map(p => ({ value: p, label: p }))
+              ]}
+            />
 
-            <select
+            <Select
+              className="w-[140px]"
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as 'all' | 'published' | 'draft')}
-              className="px-3 py-2 border border-zinc-200 rounded-lg text-sm bg-white"
-            >
-              <option value="all">Status: All</option>
-              <option value="published">Published</option>
-              <option value="draft">Draft</option>
-            </select>
+              onChange={(val) => setStatusFilter(val as 'all' | 'published' | 'draft')}
+              options={[
+                { value: 'all', label: 'Status: All' },
+                { value: 'published', label: 'Published' },
+                { value: 'draft', label: 'Draft' }
+              ]}
+            />
 
-            <select
+            <Select
+              className="w-[160px]"
               value={priceRange}
-              onChange={(e) => setPriceRange(e.target.value as PriceRange)}
-              className="px-3 py-2 border border-zinc-200 rounded-lg text-sm bg-white"
-            >
-              <option value="all">Price: All</option>
-              <option value="lt1">&lt; $1 / 1M</option>
-              <option value="1to10">$1 - $10 / 1M</option>
-              <option value="gte10">&gt; $10 / 1M</option>
-            </select>
+              onChange={(val) => setPriceRange(val as PriceRange)}
+              options={[
+                { value: 'all', label: 'Price: All' },
+                { value: 'lt1', label: '< $1 / 1M' },
+                { value: '1to10', label: '$1 - $10 / 1M' },
+                { value: 'gte10', label: '> $10 / 1M' }
+              ]}
+            />
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => setProviderDrawerOpen(true)}
+              onClick={openProviderDrawer}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-zinc-200 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
             >
-              <Plus size={14} /> + Provider
+              <Plus size={14} /> Provider
             </button>
             <button
               onClick={() => {
                 if (!hasProviders) {
-                  setProviderDrawerOpen(true);
+                  openProviderDrawer();
                   return;
                 }
                 openCreateDrawer('quick');
               }}
               className={`inline-flex items-center gap-1.5 bg-black text-white rounded-lg px-3.5 py-2 text-sm font-semibold ${!hasProviders ? 'opacity-70' : ''}`}
-              title={!hasProviders ? 'Create a Provider Account first' : undefined}
+              title={!hasProviders ? 'Please create a Provider Account first' : 'Add a new price entry'}
             >
               <Plus size={14} /> New Price
             </button>
             <button
               onClick={() => {
                 if (!hasProviders) {
-                  setProviderDrawerOpen(true);
+                  openProviderDrawer();
                   return;
                 }
                 openCreateDrawer('batch');
               }}
               className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-zinc-200 text-sm font-semibold hover:bg-zinc-50 ${!hasProviders ? 'opacity-70' : ''}`}
-              title={!hasProviders ? 'Create a Provider Account first' : undefined}
+              title={!hasProviders ? 'Please create a Provider Account first' : 'Configure batch markup rules'}
             >
               <SlidersHorizontal size={14} /> Batch Rules
             </button>
@@ -658,48 +674,90 @@ export default function PricingView() {
       )}
 
       {providerDrawerOpen && (
-        <>
-          <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setProviderDrawerOpen(false)} />
-          <aside className="fixed top-0 right-0 h-full w-full max-w-[480px] bg-white border-l border-zinc-200 shadow-2xl z-50 flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setProviderDrawerOpen(false)} />
+          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
             <div className="px-5 py-4 border-b flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-lg">New Provider</h3>
-                <p className="text-xs text-zinc-500 mt-0.5">Create provider account for pricing bindings.</p>
+                <h3 className="font-bold text-lg">Add Provider Account</h3>
+                <p className="text-xs text-zinc-500 mt-0.5">Register a new upstream provider to bind pricing rules to.</p>
               </div>
               <button onClick={() => setProviderDrawerOpen(false)} className="p-2 rounded-md hover:bg-zinc-100"><X size={18} /></button>
             </div>
-            <div className="flex-1 overflow-auto px-5 py-4 space-y-3">
-              <input
-                value={newProvider.provider}
-                onChange={(e) => setNewProvider({...newProvider, provider: e.target.value})}
-                placeholder="provider id (e.g. openai)"
-                className="w-full px-3 py-2 border rounded-lg"
-              />
-              <input
-                value={newProvider.label}
-                onChange={(e) => setNewProvider({...newProvider, label: e.target.value})}
-                placeholder="provider name"
-                className="w-full px-3 py-2 border rounded-lg"
-              />
-              <input
-                value={newProvider.base_url}
-                onChange={(e) => setNewProvider({...newProvider, base_url: e.target.value})}
-                placeholder="base url"
-                className="w-full px-3 py-2 border rounded-lg"
-              />
-              <input
-                value={newProvider.docs_url}
-                onChange={(e) => setNewProvider({...newProvider, docs_url: e.target.value})}
-                placeholder="docs url"
-                className="w-full px-3 py-2 border rounded-lg"
-              />
-              <input
-                type="password"
-                value={newProvider.key}
-                onChange={(e) => setNewProvider({...newProvider, key: e.target.value})}
-                placeholder="api key"
-                className="w-full px-3 py-2 border rounded-lg"
-              />
+            <div className="flex-1 overflow-auto px-5 py-5 space-y-4">
+              <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                A <strong>Provider Account</strong> represents a single upstream API account (e.g. your OpenAI org key). Each price rule must be linked to one.
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Display Name <span className="text-red-400">*</span></label>
+                <input
+                  value={newProvider.label}
+                  onChange={(e) => {
+                    const label = e.target.value;
+                    const slug = label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+                    setNewProvider(prev => ({
+                      ...prev,
+                      label,
+                      provider: slug,
+                      base_url: slug ? `https://api.${slug}.com/v1` : prev.base_url
+                    }));
+                  }}
+                  placeholder="e.g. OpenAI (Production)"
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:border-black focus:ring-4 focus:ring-black/5"
+                />
+                <p className="text-xs text-zinc-400">Human-readable name shown in the UI.</p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Protocol <span className="text-red-400">*</span></label>
+                <div className="relative">
+                  <Select
+                    value={newProvider.driver_type}
+                    onChange={(val) => {
+                      const updates: Record<string, string> = { driver_type: val };
+                      if (val === 'anthropic' && newProvider.base_url === 'https://api.openai.com/v1') {
+                        updates.base_url = 'https://api.anthropic.com/v1';
+                        updates.docs_url = 'https://docs.anthropic.com/en/api/getting-started';
+                      } else if (val === 'openai_compatible' && newProvider.base_url === 'https://api.anthropic.com/v1') {
+                        updates.base_url = 'https://api.openai.com/v1';
+                        updates.docs_url = 'https://platform.openai.com/docs';
+                      }
+                      setNewProvider(prev => ({...prev, ...updates}));
+                    }}
+                    options={[
+                      { value: 'openai_compatible', label: 'OpenAI Compatible' },
+                      { value: 'anthropic', label: 'Anthropic' }
+                    ]}
+                  />
+                </div>
+                <p className="text-xs text-zinc-400">The protocol/driver to use for upstream API.</p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Base URL</label>
+                <input
+                  value={newProvider.base_url}
+                  onChange={(e) => setNewProvider({...newProvider, base_url: e.target.value})}
+                  placeholder="https://api.openai.com/v1"
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:border-black focus:ring-4 focus:ring-black/5"
+                />
+                <p className="text-xs text-zinc-400">The API endpoint the gateway will forward requests to.</p>
+              </div>
+
+
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">API Key <span className="text-red-400">*</span></label>
+                <input
+                  type="password"
+                  value={newProvider.key}
+                  onChange={(e) => setNewProvider({...newProvider, key: e.target.value})}
+                  placeholder="sk-..."
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:border-black focus:ring-4 focus:ring-black/5"
+                />
+                <p className="text-xs text-zinc-400">Stored encrypted. Used by the gateway to authenticate upstream requests.</p>
+              </div>
             </div>
             <div className="border-t px-5 py-4 bg-white">
               <button
@@ -707,17 +765,17 @@ export default function PricingView() {
                 disabled={providerSaving || !newProvider.provider.trim() || !newProvider.key.trim()}
                 className="w-full bg-black text-white rounded-lg px-4 py-2 font-semibold disabled:opacity-50"
               >
-                {providerSaving ? 'Saving...' : 'Save Provider'}
+                {providerSaving ? 'Saving...' : 'Save Provider Account'}
               </button>
             </div>
-          </aside>
-        </>
+          </div>
+        </div>
       )}
 
       {drawerOpen && (
-        <>
-          <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setDrawerOpen(false)} />
-          <aside className="fixed top-0 right-0 h-full w-full max-w-[480px] bg-white border-l border-zinc-200 shadow-2xl z-50 flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDrawerOpen(false)} />
+          <div className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
             <div className="px-5 py-4 border-b flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-lg">{model ? 'Edit Price' : 'New Price'}</h3>
@@ -748,12 +806,11 @@ export default function PricingView() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Provider Account</label>
-                    <select value={providerAccountId} onChange={(e) => setProviderAccountId(e.target.value)} className="w-full px-3 py-2 border rounded-lg bg-white">
-                      <option value="">Select provider account (required)</option>
-                      {providers.map((provider) => (
-                        <option key={provider} value={provider}>{provider}</option>
-                      ))}
-                    </select>
+                    <Select
+                      value={providerAccountId}
+                      onChange={(val) => setProviderAccountId(val)}
+                      options={[{ value: '', label: 'Select provider account (required)' }, ...providers.map(p => ({ value: p, label: p }))]}
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
@@ -820,10 +877,14 @@ export default function PricingView() {
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Price Mode</label>
-                    <select value={formPriceMode} onChange={(e) => setFormPriceMode(e.target.value as 'fixed' | 'markup')} className="w-full px-3 py-2 border rounded-lg bg-white">
-                      <option value="fixed">Fixed</option>
-                      <option value="markup">Markup</option>
-                    </select>
+                    <Select
+                      value={formPriceMode}
+                      onChange={(val) => setFormPriceMode(val as 'fixed' | 'markup')}
+                      options={[
+                        { value: 'fixed', label: 'Fixed' },
+                        { value: 'markup', label: 'Markup' }
+                      ]}
+                    />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Model ID</label>
@@ -831,12 +892,11 @@ export default function PricingView() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Provider Account</label>
-                    <select value={providerAccountId} onChange={(e) => setProviderAccountId(e.target.value)} className="w-full px-3 py-2 border rounded-lg bg-white">
-                      <option value="">Select provider account (required)</option>
-                      {providers.map((provider) => (
-                        <option key={provider} value={provider}>{provider}</option>
-                      ))}
-                    </select>
+                    <Select
+                      value={providerAccountId}
+                      onChange={(val) => setProviderAccountId(val)}
+                      options={[{ value: '', label: 'Select provider account (required)' }, ...providers.map(p => ({ value: p, label: p }))]}
+                    />
                   </div>
                   {formPriceMode === 'markup' ? (
                     <div className="space-y-2">
@@ -875,8 +935,8 @@ export default function PricingView() {
                 <button onClick={handlePublish} disabled={busy || draft.length === 0} className="px-3 py-2 rounded-lg border border-black bg-black text-white text-sm font-semibold disabled:opacity-50">Publish</button>
               </div>
             </div>
-          </aside>
-        </>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -4,7 +4,7 @@ export type ModelPayload = {
   provider: string;
   description?: string;
   context?: string;
-  pricing?: {prompt?: string; completion?: string};
+  pricing?: {prompt?: string; completion?: string; cache_read?: string; cache_write?: string; reasoning?: string;};
   tags?: string[];
   isPopular?: boolean;
   latency?: string;
@@ -15,6 +15,8 @@ export type PricingDraftUpsertRequest = {
   model: string;
   provider_account_id?: string | null;
   price_mode: 'fixed' | 'markup';
+  input_cost?: number | null;
+  output_cost?: number | null;
   input_price?: number | null;
   output_price?: number | null;
   cache_read_price?: number | null;

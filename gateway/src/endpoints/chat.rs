@@ -128,24 +128,16 @@ pub async fn handle_chat_completions(
         .or_else(|| payload.get("provider_account_id").and_then(Value::as_str));
     if let Some(model_name) = model {
         match state
-            .db_pool
+            .cache
             .get_effective_pricing(model_name, provider_account_id)
             .await
         {
-            Ok(Some(_)) => {}
-            Ok(None) => {
+            Some(_) => {}
+            None => {
                 return error_response(
                     StatusCode::BAD_REQUEST,
                     format!("pricing_not_found for model {} and provider {:?}", model_name, provider_account_id),
                     "pricing_not_found",
-                )
-                .into_response();
-            }
-            Err(err) => {
-                return error_response(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Failed to load pricing: {}", err),
-                    "db_error",
                 )
                 .into_response();
             }

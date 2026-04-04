@@ -81,6 +81,9 @@ async function upsertModelMetadataFromModel(model: ModelPayload) {
       JSON.stringify({
         prompt: parsePrice(model.pricing?.prompt),
         completion: parsePrice(model.pricing?.completion),
+        cache_read: parsePrice(model.pricing?.cache_read),
+        cache_write: parsePrice(model.pricing?.cache_write),
+        reasoning: parsePrice(model.pricing?.reasoning),
       }),
       Date.now(),
     ],

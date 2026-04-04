@@ -4,7 +4,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 import dotenv from 'dotenv';
-dotenv.config({ override: true });
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '.env'), override: true });
 
 import { pool, initSchema } from './db';
 import { AuthUser, AuthenticatedRequest } from './types';
@@ -12,13 +13,13 @@ import authRouter from './routes/auth';
 import modelsRouter from './routes/models';
 import pricingRouter from './routes/pricing';
 import gatewayRouter from './routes/gateway';
+import llmModelsRouter from './routes/llm_models';
 import providersRouter from './routes/providers';
 import { authenticate } from './middleware/auth';
 import keysRouter from './routes/keys';
 import activityRouter from './routes/activity';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.PORT || 3001);
+const PORT = Number(process.env.PORT || 3322);
 
 async function startServer() {
   await initSchema();
@@ -56,6 +57,7 @@ async function startServer() {
   app.use('/api/auth', authRouter);
   app.use('/api/models', modelsRouter);
   app.use('/api/pricing', pricingRouter);
+  app.use('/api/llm-models', llmModelsRouter);
   app.use('/api/gateway', gatewayRouter);
   app.use('/api', providersRouter);
   app.use('/api/user-api-keys', keysRouter);
@@ -63,13 +65,14 @@ async function startServer() {
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
+      root: path.join(__dirname, '../web'),
       configFile: path.join(__dirname, '../web/vite.config.ts'),
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = path.join(__dirname, '../dist');
     app.use(express.static(distPath));
     app.get('*', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));

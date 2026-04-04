@@ -17,7 +17,7 @@ router.get('/', async (_req, res) => {
   const stateResult = await pool.query('SELECT current_version FROM pricing_state WHERE id = 1');
   const currentVersion = stateResult.rows[0]?.current_version || 'bootstrap';
   const { rows } = await pool.query(
-    `SELECT model_id, provider_account_id, price_mode, input_price, output_price, cache_read_price, cache_write_price,
+    `SELECT model_id, provider_account_id, price_mode, input_cost, output_cost, input_price, output_price, cache_read_price, cache_write_price,
             reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, version, updated_at
      FROM model_provider_pricings
      WHERE version = $1
@@ -29,7 +29,7 @@ router.get('/', async (_req, res) => {
 
 router.get('/draft', async (_req, res) => {
   const { rows } = await pool.query(
-    `SELECT model_id, provider_account_id, price_mode, input_price, output_price, cache_read_price, cache_write_price,
+    `SELECT model_id, provider_account_id, price_mode, input_cost, output_cost, input_price, output_price, cache_read_price, cache_write_price,
             reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, updated_at
      FROM model_provider_pricings_draft
      ORDER BY model_id ASC, provider_account_id ASC`,
@@ -61,13 +61,15 @@ router.put('/draft', async (req, res) => {
 
   await pool.query(
     `INSERT INTO model_provider_pricings_draft (
-       model_id, provider_account_id, price_mode, input_price, output_price, cache_read_price, cache_write_price,
+       model_id, provider_account_id, price_mode, input_cost, output_cost, input_price, output_price, cache_read_price, cache_write_price,
        reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, updated_at
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
      ON CONFLICT (model_id, provider_account_id)
      DO UPDATE SET
        price_mode = EXCLUDED.price_mode,
+       input_cost = EXCLUDED.input_cost,
+       output_cost = EXCLUDED.output_cost,
        input_price = EXCLUDED.input_price,
        output_price = EXCLUDED.output_price,
        cache_read_price = EXCLUDED.cache_read_price,
@@ -84,6 +86,8 @@ router.put('/draft', async (req, res) => {
       modelId,
       providerAccountId,
       mode,
+      payload.input_cost ?? null,
+      payload.output_cost ?? null,
       mode === 'fixed' ? payload.input_price ?? null : null,
       mode === 'fixed' ? payload.output_price ?? null : null,
       mode === 'fixed' ? payload.cache_read_price ?? null : null,
@@ -118,14 +122,14 @@ router.delete('/draft', async (req, res) => {
 
 router.post('/preview', async (_req, res) => {
   const draftResult = await pool.query(
-    `SELECT model_id, provider_account_id, price_mode, input_price, output_price, cache_read_price, cache_write_price,
+    `SELECT model_id, provider_account_id, price_mode, input_cost, output_cost, input_price, output_price, cache_read_price, cache_write_price,
             reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, updated_at
      FROM model_provider_pricings_draft`,
   );
   const stateResult = await pool.query('SELECT current_version FROM pricing_state WHERE id = 1');
   const currentVersion = stateResult.rows[0]?.current_version || 'bootstrap';
   const currentResult = await pool.query(
-    `SELECT model_id, provider_account_id, price_mode, input_price, output_price, cache_read_price, cache_write_price,
+    `SELECT model_id, provider_account_id, price_mode, input_cost, output_cost, input_price, output_price, cache_read_price, cache_write_price,
             reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, version, updated_at
      FROM model_provider_pricings
      WHERE version = $1`,
@@ -178,10 +182,10 @@ router.post('/publish', async (req, res) => {
     if (draftCount > 0) {
       await client.query(
         `INSERT INTO model_provider_pricings (
-           model_id, provider_account_id, price_mode, input_price, output_price, cache_read_price, cache_write_price,
+           model_id, provider_account_id, price_mode, input_cost, output_cost, input_price, output_price, cache_read_price, cache_write_price,
            reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, version, updated_at
          )
-         SELECT model_id, provider_account_id, price_mode, input_price, output_price, cache_read_price, cache_write_price,
+         SELECT model_id, provider_account_id, price_mode, input_cost, output_cost, input_price, output_price, cache_read_price, cache_write_price,
                 reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, $1, updated_at
          FROM model_provider_pricings_draft`,
         [version],
@@ -200,6 +204,8 @@ router.post('/publish', async (req, res) => {
       [version, 'published', JSON.stringify({ source: 'pricing_center', previous_version: currentVersion }), operator, now, configVersion],
     );
     await client.query('COMMIT');
+    // Notify Gateway to refresh pricing cache
+    await pool.query("SELECT pg_notify('config_changed', 'pricing')");
     res.json({ status: 'published', version, config_version: configVersion, affected_models: affectedModels });
   } catch (error: any) {
     await client.query('ROLLBACK');

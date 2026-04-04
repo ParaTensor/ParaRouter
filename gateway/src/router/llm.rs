@@ -1,3 +1,4 @@
+use crate::cache::ConfigCache;
 use crate::db::DatabasePool;
 use crate::endpoints::emulators::{anthropic, ollama, openai};
 use crate::endpoints::{handle_chat_completions, handle_get_model, handle_list_models, ProxyState};
@@ -18,6 +19,7 @@ pub fn build_llm_proxy_routes(
     llm_service: Arc<RwLock<LlmService>>,
     config: Arc<RwLock<Settings>>,
     trace: Option<Arc<crate::trace::TraceClient>>,
+    cache: ConfigCache,
 ) -> Router {
     let state = ProxyState {
         db_pool,
@@ -25,6 +27,7 @@ pub fn build_llm_proxy_routes(
         llm_service,
         config,
         trace,
+        cache,
     };
 
     let mut router = Router::new()

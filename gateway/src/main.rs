@@ -1,5 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
+use opengateway::cache::ConfigCache;
+use opengateway::cache::listener::spawn_config_listener;
 use opengateway::cli::{handle_command, Args};
 use opengateway::config::{ConfigLoader, ConfigManager, ModelSyncer};
 use opengateway::db::init::try_database_with_url;
@@ -54,6 +56,15 @@ async fn run_multi_mode(args: Args) -> Result<()> {
     }
     let _health_check = Arc::clone(&pool_manager).start_health_check();
 
+    // Initialize in-memory config cache
+    let config_cache = ConfigCache::new();
+    if let Err(e) = config_cache.load_all(&db_pool).await {
+        warn!("ConfigCache initial load failed: {}. Cache will be empty until next NOTIFY.", e);
+    }
+
+    // Spawn PG LISTEN background task for real-time cache invalidation
+    spawn_config_listener(db_pool.clone(), config_cache.clone());
+
     let settings = settings_from_db_or_default(&db_pool).await;
     let llm_service = Arc::new(tokio::sync::RwLock::new(Service::new(&settings.llm_backend)?));
     let runtime_settings = Arc::new(tokio::sync::RwLock::new(settings));
@@ -66,6 +77,7 @@ async fn run_multi_mode(args: Args) -> Result<()> {
         runtime_settings,
         Arc::new(config.clone()),
         trace,
+        config_cache,
     );
 
     let bind_addr = format!("{}:{}", config.server.host, config.server.port);

@@ -1,3 +1,4 @@
+use crate::cache::ConfigCache;
 use crate::db::DatabasePool;
 use crate::pool::PoolManager;
 use crate::service::Service as LlmService;
@@ -14,6 +15,7 @@ pub struct ProxyState {
     pub llm_service: Arc<RwLock<LlmService>>,
     pub config: Arc<RwLock<Settings>>,
     pub trace: Option<Arc<TraceClient>>,
+    pub cache: ConfigCache,
 }
 
 impl ProxyState {

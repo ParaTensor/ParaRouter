@@ -10,10 +10,22 @@ const initialModels = [
     provider: 'Anthropic',
     description: "Anthropic's most intelligent model to date, offering high performance and speed.",
     context: '200k',
-    pricing: {prompt: '$3.00', completion: '$15.00'},
+    pricing: {prompt: '$3.00', completion: '$15.00', cache_write: '$3.75', cache_read: '$0.30'},
     tags: ['New', 'Intelligent'],
     isPopular: true,
     latency: '1.2s',
+    status: 'online',
+  },
+  {
+    id: 'openai/o1-preview',
+    name: 'o1-preview',
+    provider: 'OpenAI',
+    description: "OpenAI's latest reasoning model designed to solve hard problems with thinking tokens.",
+    context: '128k',
+    pricing: {prompt: '$15.00', completion: '$60.00', cache_read: '$7.50', reasoning: '$60.00'},
+    tags: ['Reasoning', 'Math'],
+    isPopular: false,
+    latency: '8.5s',
     status: 'online',
   },
   {
@@ -22,19 +34,19 @@ const initialModels = [
     provider: 'OpenAI',
     description: "OpenAI's most advanced multimodal model, optimized for speed and reasoning.",
     context: '128k',
-    pricing: {prompt: '$5.00', completion: '$15.00'},
+    pricing: {prompt: '$5.00', completion: '$15.00', cache_read: '$2.50'},
     tags: ['Multimodal', 'Fast'],
     isPopular: true,
     latency: '0.8s',
     status: 'online',
   },
   {
-    id: 'google/gemini-pro-1.5',
-    name: 'Gemini Pro 1.5',
+    id: 'google/gemini-1.5-pro',
+    name: 'Gemini 1.5 Pro',
     provider: 'Google',
     description: "Google's next-generation model with a massive context window and strong reasoning.",
     context: '2M',
-    pricing: {prompt: '$3.50', completion: '$10.50'},
+    pricing: {prompt: '$3.50', completion: '$10.50', cache_read: '$0.875'},
     tags: ['Large Context'],
     isPopular: false,
     latency: '2.1s',
@@ -114,7 +126,12 @@ export default function ModelsView() {
 
   const filteredModels = models.filter(
     (m) => m.name.toLowerCase().includes(search.toLowerCase()) || m.provider.toLowerCase().includes(search.toLowerCase()),
-  );
+  ).sort((a, b) => {
+    const numA = parseFloat(a.name.match(/\d+(\.\d+)?/)?.[0] || '0');
+    const numB = parseFloat(b.name.match(/\d+(\.\d+)?/)?.[0] || '0');
+    if (numB !== numA) return numB - numA;
+    return a.name.length - b.name.length;
+  });
 
   if (loading) {
     return <div className="text-center text-zinc-500">Loading models...</div>;
@@ -191,7 +208,24 @@ export default function ModelsView() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-3 border-t border-gray-50">
+            {(model.pricing.cache_read || model.pricing.cache_write || model.pricing.reasoning) && (
+              <div className="grid grid-cols-2 gap-2 mb-4 pt-1 border-t border-gray-50/50">
+                <div className="bg-emerald-50/30 rounded-lg p-2.5 border border-emerald-50/50">
+                  <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider mb-0.5">Cache Hit</p>
+                  <p className="font-mono text-xs font-semibold text-emerald-700">{model.pricing.cache_read || '-'}</p>
+                </div>
+                {model.pricing.reasoning ? (
+                  <div className="bg-indigo-50/30 rounded-lg p-2.5 border border-indigo-50/50">
+                    <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-wider mb-0.5">Reasoning</p>
+                    <p className="font-mono text-xs font-semibold text-indigo-700">{model.pricing.reasoning}</p>
+                  </div>
+                ) : (
+                  <div className="bg-transparent p-2.5"></div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-3 border-t border-gray-50 mt-auto">
               <div className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-400">
                 <Zap size={10} className="text-emerald-500" />
                 {model.latency}

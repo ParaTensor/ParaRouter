@@ -1,5 +1,5 @@
 import React from 'react';
-import {Menu, X, ChevronDown, Key, Settings, LogOut, Activity, LayoutGrid, BarChart3, MessageSquare, BookOpen, Server, BadgeDollarSign, PlugZap} from 'lucide-react';
+import {Menu, X, ChevronDown, Key, Settings, LogOut, Activity, LayoutGrid, BarChart3, MessageSquare, BookOpen, Server, BadgeDollarSign, PlugZap, Database} from 'lucide-react';
 import {cn} from '../lib/utils';
 import {clearAuthSession, localUser} from '../lib/session';
 import {apiPost} from '../lib/api';
@@ -31,6 +31,8 @@ export default function Navbar() {
     {id: '/hub', label: 'Hub', icon: Server},
   ];
 
+  const filteredLinks = [...navLinks, {id: '/global-models', label: 'Global Models', icon: Database}];
+
   return (
     <nav className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-sm border-b border-gray-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -43,7 +45,7 @@ export default function Navbar() {
           </Link>
 
           <div className="hidden md:flex items-center gap-1">
-            {navLinks.map((link) => (
+            {filteredLinks.map((link) => (
               <Link
                 key={link.id}
                 to={link.id}
@@ -88,6 +90,20 @@ export default function Navbar() {
                 >
                   <Settings size={14} /> Settings
                 </button>
+                {localUser?.role === 'admin' && (
+                  <>
+                    <div className="h-px bg-gray-50 my-1.5" />
+                    <div className="px-4 py-1.5 mb-0.5">
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Admin</p>
+                    </div>
+                    <button
+                      onClick={() => navigate('/global-models')}
+                      className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-zinc-600 hover:text-black hover:bg-gray-50 transition-colors"
+                    >
+                      <Database size={14} /> Global Models
+                    </button>
+                  </>
+                )}
                 <div className="h-px bg-gray-50 my-1.5" />
                 <button
                   onClick={handleLogout}
@@ -107,7 +123,7 @@ export default function Navbar() {
 
       {isMenuOpen && (
         <div className="md:hidden bg-white border-b border-gray-100 px-4 py-3 space-y-1 shadow-sm">
-          {navLinks.map((link) => (
+          {filteredLinks.map((link) => (
             <Link
               key={link.id}
               to={link.id}

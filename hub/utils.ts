@@ -109,6 +109,8 @@ export function mapPricingRow(row: any) {
     model: row.model_id,
     provider_account_id: row.provider_account_id,
     price_mode: row.price_mode,
+    input_cost: row.input_cost,
+    output_cost: row.output_cost,
     input_price: row.input_price,
     output_price: row.output_price,
     cache_read_price: row.cache_read_price,

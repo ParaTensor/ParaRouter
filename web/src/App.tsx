@@ -11,6 +11,7 @@ import HubConsoleView from './views/HubConsole';
 import PricingView from './views/Pricing';
 import ProvidersView from './views/Providers';
 import ModelProvidersView from './views/ModelProviders';
+import GlobalModelsView from './views/GlobalModels';
 import LoginView from './views/Login';
 import {motion, AnimatePresence} from 'motion/react';
 import {Link, Navigate, Route, Routes, useLocation} from 'react-router-dom';
@@ -53,6 +54,7 @@ export default function App() {
                 <Route path="/pricing" element={authed ? <PricingView /> : <Navigate to="/login" replace />} />
                 <Route path="/providers" element={authed ? <ProvidersView /> : <Navigate to="/login" replace />} />
                 <Route path="/models/:modelId/providers" element={authed ? <ModelProvidersView /> : <Navigate to="/login" replace />} />
+                <Route path="/global-models" element={authed ? <GlobalModelsView /> : <Navigate to="/login" replace />} />
                 <Route path="/chat" element={authed ? <ChatView /> : <Navigate to="/login" replace />} />
                 <Route path="/docs" element={authed ? <DocsView /> : <Navigate to="/login" replace />} />
                 <Route path="/hub" element={authed ? <HubConsoleView /> : <Navigate to="/login" replace />} />

@@ -1,3 +1,4 @@
+use crate::cache::ConfigCache;
 use crate::db::DatabasePool;
 use crate::pool::PoolManager;
 use axum::Router;
@@ -55,6 +56,7 @@ pub fn build_multi_mode_app(
     config_settings: Arc<RwLock<Settings>>,
     _config: Arc<crate::config::Config>,
     trace: Option<Arc<crate::trace::TraceClient>>,
+    cache: ConfigCache,
 ) -> Router {
     let llm_proxy_routes = build_llm_proxy_routes(
         db_pool.clone(),
@@ -62,6 +64,7 @@ pub fn build_multi_mode_app(
         llm_service.clone(),
         config_settings.clone(),
         trace.clone(),
+        cache.clone(),
     );
 
     // Create state for direct use in basic routes
@@ -71,6 +74,7 @@ pub fn build_multi_mode_app(
         llm_service: llm_service.clone(),
         config: config_settings.clone(),
         trace,
+        cache,
     };
     let basic_routes = build_basic_routes(state.clone());
 
