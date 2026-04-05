@@ -36,7 +36,7 @@ export default function App() {
       {showShell && <Navbar />}
 
       <main className="min-h-screen">
-        <div className={showShell ? 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12' : ''}>
+        <div className={showShell ? 'max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-12' : ''}>
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={`${location.pathname}:${authVersion}`}
@@ -68,7 +68,7 @@ export default function App() {
       </main>
 
       {showShell && <footer className="border-t bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
             <div className="col-span-1 md:col-span-1 space-y-4">
               <div className="flex items-center gap-2">

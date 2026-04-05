@@ -38,9 +38,21 @@ export async function initSchema() {
       updated_at BIGINT NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS provider_keys (
-      provider TEXT PRIMARY KEY,
-      key TEXT NOT NULL,
+    CREATE TABLE IF NOT EXISTS provider_accounts (
+      id TEXT PRIMARY KEY,
+      provider_type TEXT NOT NULL,
+      label TEXT NOT NULL,
+      base_url TEXT NOT NULL,
+      docs_url TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      updated_at BIGINT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS provider_api_keys (
+      id TEXT PRIMARY KEY,
+      provider_account_id TEXT NOT NULL REFERENCES provider_accounts(id) ON DELETE CASCADE,
+      label TEXT NOT NULL,
+      api_key TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'active',
       updated_at BIGINT NOT NULL
     );
@@ -114,18 +126,6 @@ export async function initSchema() {
       global_pricing JSONB NOT NULL DEFAULT '{}'::jsonb,
       updated_at BIGINT NOT NULL
     );
-
-    CREATE TABLE IF NOT EXISTS provider_accounts (
-      id TEXT PRIMARY KEY,
-      provider_type TEXT NOT NULL,
-      label TEXT NOT NULL,
-      base_url TEXT NOT NULL,
-      docs_url TEXT,
-      api_key TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'active',
-      updated_at BIGINT NOT NULL
-    );
-
     CREATE TABLE IF NOT EXISTS model_provider_pricings (
       model_id TEXT NOT NULL,
       provider_account_id TEXT NOT NULL,
@@ -138,6 +138,7 @@ export async function initSchema() {
       cache_write_price DOUBLE PRECISION,
       reasoning_price DOUBLE PRECISION,
       markup_rate DOUBLE PRECISION,
+      provider_key_id TEXT NOT NULL,
       currency TEXT NOT NULL DEFAULT 'USD',
       context_length INTEGER,
       latency_ms INTEGER,
@@ -145,7 +146,7 @@ export async function initSchema() {
       status TEXT NOT NULL DEFAULT 'online',
       version TEXT NOT NULL,
       updated_at BIGINT NOT NULL,
-      PRIMARY KEY (model_id, provider_account_id, version),
+      PRIMARY KEY (model_id, provider_account_id, provider_key_id, version),
       CHECK (
         (price_mode = 'fixed' AND input_price IS NOT NULL AND output_price IS NOT NULL AND markup_rate IS NULL) OR
         (price_mode = 'markup' AND markup_rate IS NOT NULL)
@@ -164,13 +165,14 @@ export async function initSchema() {
       cache_write_price DOUBLE PRECISION,
       reasoning_price DOUBLE PRECISION,
       markup_rate DOUBLE PRECISION,
+      provider_key_id TEXT NOT NULL,
       currency TEXT NOT NULL DEFAULT 'USD',
       context_length INTEGER,
       latency_ms INTEGER,
       is_top_provider BOOLEAN NOT NULL DEFAULT false,
       status TEXT NOT NULL DEFAULT 'online',
       updated_at BIGINT NOT NULL,
-      PRIMARY KEY (model_id, provider_account_id),
+      PRIMARY KEY (model_id, provider_account_id, provider_key_id),
       CHECK (
         (price_mode = 'fixed' AND input_price IS NOT NULL AND output_price IS NOT NULL AND markup_rate IS NULL) OR
         (price_mode = 'markup' AND markup_rate IS NOT NULL)
@@ -222,6 +224,28 @@ export async function initSchema() {
   await pool.query(`ALTER TABLE model_provider_pricings ADD COLUMN IF NOT EXISTS output_cost DOUBLE PRECISION`);
   await pool.query(`ALTER TABLE model_provider_pricings_draft ADD COLUMN IF NOT EXISTS input_cost DOUBLE PRECISION`);
   await pool.query(`ALTER TABLE model_provider_pricings_draft ADD COLUMN IF NOT EXISTS output_cost DOUBLE PRECISION`);
+  await pool.query(`ALTER TABLE model_provider_pricings ADD COLUMN IF NOT EXISTS cache_read_cost DOUBLE PRECISION`);
+  await pool.query(`ALTER TABLE model_provider_pricings ADD COLUMN IF NOT EXISTS cache_write_cost DOUBLE PRECISION`);
+  await pool.query(`ALTER TABLE model_provider_pricings ADD COLUMN IF NOT EXISTS reasoning_cost DOUBLE PRECISION`);
+  await pool.query(`ALTER TABLE model_provider_pricings_draft ADD COLUMN IF NOT EXISTS cache_read_cost DOUBLE PRECISION`);
+  await pool.query(`ALTER TABLE model_provider_pricings_draft ADD COLUMN IF NOT EXISTS cache_write_cost DOUBLE PRECISION`);
+  await pool.query(`ALTER TABLE model_provider_pricings_draft ADD COLUMN IF NOT EXISTS reasoning_cost DOUBLE PRECISION`);
+  
+  // Group Support Migrations
+  // Since we are moving to Key-centric pricing, we will bypass the old price_group columns
+  // Note: Local postgres wiping script will run to wipe the tables so no alter table needed
+
+  try {
+    // model_provider_pricings
+    await pool.query(`ALTER TABLE model_provider_pricings DROP CONSTRAINT IF EXISTS model_provider_pricings_pkey`);
+    await pool.query(`ALTER TABLE model_provider_pricings ADD PRIMARY KEY (model_id, provider_account_id, provider_key_id, version)`);
+  } catch (err: any) { console.error('Migration failed (pricings pkey):', err.message); }
+
+  try {
+    // model_provider_pricings_draft
+    await pool.query(`ALTER TABLE model_provider_pricings_draft DROP CONSTRAINT IF EXISTS model_provider_pricings_draft_pkey`);
+    await pool.query(`ALTER TABLE model_provider_pricings_draft ADD PRIMARY KEY (model_id, provider_account_id, provider_key_id)`);
+  } catch (err: any) { console.error('Migration failed (pricings_draft pkey):', err.message); }
 
   const defaultLlmModels = [
     // OpenAI Models from developers.openai.com 2026 (Verified via User Screenshot)

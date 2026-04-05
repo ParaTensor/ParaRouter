@@ -254,7 +254,10 @@ impl DatabasePool {
                     INSERT INTO provider_keys (provider, key, status, updated_at)
                     VALUES ($1, $2, $3, $4)
                     ON CONFLICT (provider)
-                    DO UPDATE SET key = EXCLUDED.key, status = EXCLUDED.status, updated_at = EXCLUDED.updated_at
+                    DO UPDATE SET 
+                      key = CASE WHEN EXCLUDED.key != '' THEN EXCLUDED.key ELSE provider_keys.key END,
+                      status = EXCLUDED.status, 
+                      updated_at = EXCLUDED.updated_at
                     "#,
                 )
                 .bind(provider)

@@ -1,74 +1,17 @@
 import React from 'react';
-import {Search, Plus, SlidersHorizontal, X, ChevronRight, ChevronLeft} from 'lucide-react';
-import {apiDelete, apiGet, apiPost, apiPut} from '../lib/api';
-import {useNavigate} from 'react-router-dom';
-import {Select} from '../components/Select';
+import { X } from 'lucide-react';
+import { apiDelete, apiGet, apiPost, apiPut } from '../lib/api';
+import PricingHeader from './pricing/PricingHeader';
+import PricingTable from './pricing/PricingTable';
+import ProviderAccountModal from './pricing/ProviderAccountModal';
+import EditPriceModal from './pricing/EditPriceModal';
+import {
+  PricingRow, PublishedPricingRow, ProviderKeyRow, PricingTableRow,
+  PricingPreview, PricingRelease, SortKey, PriceRange, DrawerTab
+} from './pricing/types';
 
-type PricingRow = {
-  model: string;
-  provider_account_id?: string | null;
-  price_mode: 'fixed' | 'markup';
-  input_price?: number | null;
-  output_price?: number | null;
-  cache_read_price?: number | null;
-  cache_write_price?: number | null;
-  reasoning_price?: number | null;
-  markup_rate?: number | null;
-  currency: string;
-  context_length?: number | null;
-  latency_ms?: number | null;
-  is_top_provider?: boolean | null;
-  status?: string;
-  updated_at?: number;
-};
-
-type PublishedPricingRow = PricingRow & {
-  version: string;
-  updated_at: number;
-};
-
-type ProviderKeyRow = {
-  provider: string;
-  status: string;
-};
-
-type PricingTableRow = PricingRow & {
-  status: 'Draft' | 'Published';
-  operational_status?: string | null;
-};
-
-type PricingPreview = {
-  affected_models?: number;
-  changes_count?: number;
-  estimated_profit_margin?: number | null;
-};
-
-type PricingRelease = {
-  version: string;
-  status: string;
-  operator: string;
-  created_at: number;
-};
-
-type SortKey = 'model' | 'provider' | 'input' | 'output' | 'final' | 'status' | 'updated';
-
-type PriceRange = 'all' | 'lt1' | '1to10' | 'gte10';
-
-type DrawerTab = 'quick' | 'batch' | 'advanced';
-
-const rowKey = (row: {model: string; provider_account_id?: string | null}) => `${row.model}::${row.provider_account_id || ''}`;
-
-const numberText = (value?: number | null) => (typeof value === 'number' ? String(value) : '');
-
-const fmtPrice = (value?: number | null) => (typeof value === 'number' ? `$${value.toFixed(2)}` : '-');
-const fmtNum = (value?: number | null) => (typeof value === 'number' ? String(value) : '-');
-const fmtLatency = (value?: number | null) => (typeof value === 'number' ? `${value}ms` : '-');
-
-const fmtMarkup = (value?: number | null) => {
-  if (typeof value !== 'number') return '-';
-  const percent = value > 1 ? value : value * 100;
-  return `+${percent.toFixed(2)}%`;
-};
+const rowKey = (row: {model: string; provider_account_id?: string | null; provider_key_id?: string}) => 
+    `${row.model}::${row.provider_account_id || ''}::${row.provider_key_id || ''}`;
 
 const getFinalPrice = (row: Pick<PricingRow, 'price_mode' | 'input_price' | 'output_price' | 'markup_rate'>) => {
   if (row.price_mode === 'fixed') {
@@ -93,7 +36,6 @@ const fmtAge = (ts?: number) => {
 };
 
 export default function PricingView() {
-  const navigate = useNavigate();
   const [draft, setDraft] = React.useState<PricingRow[]>([]);
   const [published, setPublished] = React.useState<PublishedPricingRow[]>([]);
   const [providers, setProviders] = React.useState<string[]>([]);
@@ -110,10 +52,16 @@ export default function PricingView() {
 
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [drawerTab, setDrawerTab] = React.useState<DrawerTab>('quick');
-  const [showCacheFields, setShowCacheFields] = React.useState(false);
+
   const [formPriceMode, setFormPriceMode] = React.useState<'fixed' | 'markup'>('fixed');
   const [model, setModel] = React.useState('');
+  const [modelQuery, setModelQuery] = React.useState('');
   const [providerAccountId, setProviderAccountId] = React.useState('');
+  const [inputCost, setInputCost] = React.useState('');
+  const [outputCost, setOutputCost] = React.useState('');
+  const [cacheReadCost, setCacheReadCost] = React.useState('');
+  const [cacheWriteCost, setCacheWriteCost] = React.useState('');
+  const [reasoningCost, setReasoningCost] = React.useState('');
   const [inputPrice, setInputPrice] = React.useState('');
   const [outputPrice, setOutputPrice] = React.useState('');
   const [cacheReadPrice, setCacheReadPrice] = React.useState('');
@@ -123,34 +71,44 @@ export default function PricingView() {
   const [latencyMs, setLatencyMs] = React.useState('');
   const [isTopProvider, setIsTopProvider] = React.useState(false);
   const [markupRate, setMarkupRate] = React.useState('');
+  const [providerKeyId, setProviderKeyId] = React.useState('');
+  const [providerKeyRows, setProviderKeyRows] = React.useState<ProviderKeyRow[]>([]);
   const [providerDrawerOpen, setProviderDrawerOpen] = React.useState(false);
-  const [providerSaving, setProviderSaving] = React.useState(false);
-  const [newProvider, setNewProvider] = React.useState({
-    provider: 'openai',
-    label: 'OpenAI',
-    base_url: 'https://api.openai.com/v1',
-    docs_url: 'https://platform.openai.com/docs',
-    key: '',
-    status: 'active',
-    driver_type: 'openai_compatible',
-  });
 
   const [preview, setPreview] = React.useState<PricingPreview | null>(null);
   const [releases, setReleases] = React.useState<PricingRelease[]>([]);
   const [showHistory, setShowHistory] = React.useState(false);
   const [historyTarget, setHistoryTarget] = React.useState<{model: string; provider: string} | null>(null);
+  const [globalModels, setGlobalModels] = React.useState<any[]>([]);
+  const [discountRate, setDiscountRate] = React.useState('1.0');
 
   const loadAll = React.useCallback(async () => {
     setLoading(true);
     try {
-      const [draftRows, providerRows, publishedRows] = await Promise.all([
+      const [draftRows, providerRows, publishedRows, modelsData] = await Promise.all([
         apiGet<PricingRow[]>('/api/pricing/draft'),
         apiGet<ProviderKeyRow[]>('/api/provider-keys'),
         apiGet<PublishedPricingRow[]>('/api/pricing'),
+        apiGet<any[]>('/api/llm-models').catch(() => []),
       ]);
       setDraft(draftRows);
+      setProviderKeyRows(providerRows);
       setProviders(providerRows.map((r) => r.provider));
       setPublished(publishedRows);
+      // Map llm_models format to the shape expected by the Combobox
+      const mapped = modelsData.map((m: any) => ({
+        id: m.id,
+        name: m.name || m.id,
+        provider: m.description || '',
+        pricing: m.global_pricing ? {
+          prompt: typeof m.global_pricing.prompt === 'number' ? `$${m.global_pricing.prompt}` : m.global_pricing.prompt,
+          completion: typeof m.global_pricing.completion === 'number' ? `$${m.global_pricing.completion}` : m.global_pricing.completion,
+          cache_read: m.global_pricing.cache_read ? (typeof m.global_pricing.cache_read === 'number' ? `$${m.global_pricing.cache_read}` : m.global_pricing.cache_read) : undefined,
+          cache_write: m.global_pricing.cache_write ? (typeof m.global_pricing.cache_write === 'number' ? `$${m.global_pricing.cache_write}` : m.global_pricing.cache_write) : undefined,
+          reasoning: m.global_pricing.reasoning ? (typeof m.global_pricing.reasoning === 'number' ? `$${m.global_pricing.reasoning}` : m.global_pricing.reasoning) : undefined,
+        } : undefined,
+      }));
+      setGlobalModels(mapped);
     } finally {
       setLoading(false);
     }
@@ -168,7 +126,13 @@ export default function PricingView() {
     setDrawerTab(tab);
     setFormPriceMode('fixed');
     setModel('');
+    setModelQuery('');
     setProviderAccountId(providers[0] || '');
+    setInputCost('');
+    setOutputCost('');
+    setCacheReadCost('');
+    setCacheWriteCost('');
+    setReasoningCost('');
     setInputPrice('');
     setOutputPrice('');
     setCacheReadPrice('');
@@ -178,28 +142,31 @@ export default function PricingView() {
     setLatencyMs('');
     setIsTopProvider(false);
     setMarkupRate('');
-    setShowCacheFields(false);
+    setProviderKeyId('');
     setDrawerOpen(true);
   };
 
   const openProviderDrawer = () => {
-    setNewProvider({
-      provider: '',
-      label: '',
-      base_url: 'https://api.openai.com/v1',
-      docs_url: 'https://platform.openai.com/docs',
-      key: '',
-      status: 'active',
-      driver_type: 'openai_compatible',
-    });
     setProviderDrawerOpen(true);
   };
 
+  const handleProviderSuccess = (providerSlug: string) => {
+    setProviderAccountId(providerSlug);
+    loadAll();
+  };
+
   const openEditDrawer = (row: PricingTableRow) => {
+    const numberText = (value?: number | null) => (typeof value === 'number' ? String(value) : '');
     setDrawerTab(row.price_mode === 'markup' ? 'advanced' : 'quick');
     setFormPriceMode(row.price_mode);
     setModel(row.model);
+    setModelQuery('');
     setProviderAccountId(row.provider_account_id || '');
+    setInputCost(numberText(row.input_cost));
+    setOutputCost(numberText(row.output_cost));
+    setCacheReadCost(numberText(row.cache_read_cost));
+    setCacheWriteCost(numberText(row.cache_write_cost));
+    setReasoningCost(numberText(row.reasoning_cost));
     setInputPrice(numberText(row.input_price));
     setOutputPrice(numberText(row.output_price));
     setCacheReadPrice(numberText(row.cache_read_price));
@@ -209,7 +176,7 @@ export default function PricingView() {
     setLatencyMs(numberText(row.latency_ms));
     setIsTopProvider(Boolean(row.is_top_provider));
     setMarkupRate(numberText(row.markup_rate));
-    setShowCacheFields(Boolean(row.cache_read_price || row.cache_write_price));
+    setProviderKeyId(row.provider_key_id || '');
     setDrawerOpen(true);
   };
 
@@ -225,12 +192,18 @@ export default function PricingView() {
       reasoning_price: reasoningPrice ? Number(reasoningPrice) : null,
       status: 'online',
       is_top_provider: isTopProvider,
+      provider_key_id: providerKeyId || '',
     };
 
     if (!payload.model || !providerAccountId) return;
 
     if (mode === 'fixed') {
-      if (!inputPrice || !outputPrice) return;
+      if (!inputPrice || !outputPrice || !inputCost || !outputCost) return;
+      payload.input_cost = Number(inputCost);
+      payload.output_cost = Number(outputCost);
+      payload.cache_read_cost = cacheReadCost ? Number(cacheReadCost) : null;
+      payload.cache_write_cost = cacheWriteCost ? Number(cacheWriteCost) : null;
+      payload.reasoning_cost = reasoningCost ? Number(reasoningCost) : null;
       payload.input_price = Number(inputPrice);
       payload.output_price = Number(outputPrice);
       payload.cache_read_price = cacheReadPrice ? Number(cacheReadPrice) : null;
@@ -250,28 +223,11 @@ export default function PricingView() {
     }
   };
 
-  const saveProvider = async () => {
-    const provider = newProvider.provider.trim().toLowerCase();
-    if (!provider || !newProvider.key.trim()) return;
-    setProviderSaving(true);
-    try {
-      await apiPut(`/api/provider-keys/${encodeURIComponent(provider)}`, {
-        ...newProvider,
-        provider,
-      });
-      setProviderDrawerOpen(false);
-      setProviderAccountId(provider);
-      setNewProvider((prev) => ({...prev, provider, key: '', driver_type: 'openai_compatible'}));
-      await loadAll();
-    } finally {
-      setProviderSaving(false);
-    }
-  };
-
   const deleteDraft = async (row: PricingTableRow) => {
     if (row.status !== 'Draft') return;
     const params = new URLSearchParams({model: row.model});
     if (row.provider_account_id) params.set('provider_account_id', row.provider_account_id);
+    if (row.provider_key_id) params.set('provider_key_id', row.provider_key_id);
     setBusy(true);
     try {
       await apiDelete(`/api/pricing/draft?${params.toString()}`);
@@ -356,8 +312,6 @@ export default function PricingView() {
   const pageSize = 10;
   const totalPages = Math.max(1, Math.ceil(tableRows.length / pageSize));
   const pagedRows = tableRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const draftOnly = statusFilter === 'draft';
-  const hasProviders = providers.length > 0;
 
   const onSort = (nextKey: SortKey) => {
     if (sortKey === nextKey) {
@@ -369,7 +323,7 @@ export default function PricingView() {
   };
 
   return (
-    <div className="max-w-7xl space-y-6 relative">
+    <div className="space-y-6 relative">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Pricing Center</h1>
@@ -381,252 +335,35 @@ export default function PricingView() {
         </div>
       </div>
 
-      <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 space-y-4">
-        <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
-          <div className="flex-1 min-w-0">
-            <div className="relative group">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-black transition-colors" size={18} />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search model or provider..."
-                className="w-full pl-10 pr-3 py-2.5 bg-white border border-zinc-200 rounded-lg text-sm focus:outline-none focus:border-black focus:ring-4 focus:ring-black/5 transition-all"
-              />
-            </div>
-          </div>
+      <PricingHeader 
+        search={search} setSearch={setSearch}
+        providerFilter={providerFilter} setProviderFilter={setProviderFilter}
+        statusFilter={statusFilter} setStatusFilter={setStatusFilter}
+        priceRange={priceRange} setPriceRange={setPriceRange}
+        providers={providers}
+        openProviderDrawer={openProviderDrawer}
+        openCreateDrawer={openCreateDrawer}
+        draftOnly={statusFilter === 'draft'}
+        draftCount={draft.length}
+        preview={preview}
+        busy={busy}
+        handlePreview={handlePreview}
+        handlePublish={handlePublish}
+      />
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Select
-              className="w-[180px]"
-              value={providerFilter}
-              onChange={(val) => setProviderFilter(val)}
-              options={[
-                { value: 'all', label: 'Provider: All' },
-                ...providers.map(p => ({ value: p, label: p }))
-              ]}
-            />
-
-            <Select
-              className="w-[140px]"
-              value={statusFilter}
-              onChange={(val) => setStatusFilter(val as 'all' | 'published' | 'draft')}
-              options={[
-                { value: 'all', label: 'Status: All' },
-                { value: 'published', label: 'Published' },
-                { value: 'draft', label: 'Draft' }
-              ]}
-            />
-
-            <Select
-              className="w-[160px]"
-              value={priceRange}
-              onChange={(val) => setPriceRange(val as PriceRange)}
-              options={[
-                { value: 'all', label: 'Price: All' },
-                { value: 'lt1', label: '< $1 / 1M' },
-                { value: '1to10', label: '$1 - $10 / 1M' },
-                { value: 'gte10', label: '> $10 / 1M' }
-              ]}
-            />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={openProviderDrawer}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-zinc-200 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
-            >
-              <Plus size={14} /> Provider
-            </button>
-            <button
-              onClick={() => {
-                if (!hasProviders) {
-                  openProviderDrawer();
-                  return;
-                }
-                openCreateDrawer('quick');
-              }}
-              className={`inline-flex items-center gap-1.5 bg-black text-white rounded-lg px-3.5 py-2 text-sm font-semibold ${!hasProviders ? 'opacity-70' : ''}`}
-              title={!hasProviders ? 'Please create a Provider Account first' : 'Add a new price entry'}
-            >
-              <Plus size={14} /> New Price
-            </button>
-            <button
-              onClick={() => {
-                if (!hasProviders) {
-                  openProviderDrawer();
-                  return;
-                }
-                openCreateDrawer('batch');
-              }}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-zinc-200 text-sm font-semibold hover:bg-zinc-50 ${!hasProviders ? 'opacity-70' : ''}`}
-              title={!hasProviders ? 'Please create a Provider Account first' : 'Configure batch markup rules'}
-            >
-              <SlidersHorizontal size={14} /> Batch Rules
-            </button>
-            <button
-              onClick={() => setStatusFilter((v) => (v === 'draft' ? 'all' : 'draft'))}
-              className={`px-3.5 py-2 rounded-lg border text-sm font-semibold inline-flex items-center gap-1.5 ${draftOnly ? 'border-amber-300 text-amber-800 bg-amber-50' : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50'}`}
-            >
-              Drafts
-              <span className={`inline-flex min-w-5 justify-center rounded-full px-1.5 py-0.5 text-[11px] font-bold ${draft.length > 0 ? 'bg-amber-100 text-amber-700' : 'bg-zinc-100 text-zinc-500'}`}>
-                {draft.length}
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {draftOnly && (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-zinc-200 bg-zinc-50/60 px-4 py-3">
-            <p className="text-sm text-zinc-700">
-              {draft.length} draft items • affecting {preview?.affected_models ?? draft.length} models • estimated profit {preview?.estimated_profit_margin == null ? '-' : `${preview.estimated_profit_margin}%`}
-            </p>
-            <div className="flex items-center gap-2">
-              <button onClick={handlePreview} className="px-3 py-1.5 rounded border text-sm font-semibold" disabled={busy}>Preview All</button>
-              <button onClick={handlePublish} className="px-3 py-1.5 rounded bg-black text-white text-sm font-semibold disabled:opacity-50" disabled={busy || draft.length === 0}>Publish All</button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-50/70 border-b">
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('model')}>Model ID</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('provider')}>Provider Account</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('input')}>Input $/1M</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('output')}>Output $/1M</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('final')}>
-                  <span title="Global × Markup = Final">Final Price</span>
-                </th>
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Reasoning</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Context</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Latency</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Cache Read</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Cache Write</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('status')}>Status</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('updated')}>Updated</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {loading ? (
-                <tr>
-                  <td colSpan={13} className="px-4 py-12 text-center text-zinc-400 text-sm">Loading pricing...</td>
-                </tr>
-              ) : pagedRows.length === 0 ? (
-                <tr>
-                  <td colSpan={13} className="px-4 py-12 text-center text-zinc-400 text-sm">
-                    {hasProviders ? (
-                      'No pricing configured yet. Create your first price.'
-                    ) : (
-                      <span>
-                        No Provider Account yet.
-                        <br />
-                        Click <span className="font-semibold">+ Provider</span> in the toolbar to enable pricing.
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ) : (
-                pagedRows.map((row) => (
-                  <tr key={`${row.status}:${rowKey(row)}`} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-4 py-3 text-sm font-semibold text-zinc-900">
-                      <button onClick={() => navigate(`/models/${encodeURIComponent(row.model)}/providers`)} className="hover:underline underline-offset-2">
-                        {row.model}
-                      </button>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-zinc-600">{row.provider_account_id || '-'}</td>
-                    <td className="px-4 py-3 text-sm font-mono text-zinc-800">{fmtPrice(row.input_price)}</td>
-                    <td className="px-4 py-3 text-sm font-mono text-zinc-800">{fmtPrice(row.output_price)}</td>
-                    <td className="px-4 py-3 text-sm font-mono font-semibold text-zinc-900">
-                      <span title={row.price_mode === 'markup' ? 'Global × Markup = Final' : 'Final effective price'}>
-                        {(() => {
-                          const finalPrice = getFinalPrice(row);
-                          if (typeof finalPrice === 'number') return fmtPrice(finalPrice);
-                          return row.price_mode === 'markup' ? fmtMarkup(row.markup_rate) : '-';
-                        })()}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm font-mono text-zinc-700">{fmtPrice(row.reasoning_price)}</td>
-                    <td className="px-4 py-3 text-sm text-zinc-700">{fmtNum(row.context_length)}</td>
-                    <td className="px-4 py-3 text-sm text-zinc-700">{fmtLatency(row.latency_ms)}</td>
-                    <td className="px-4 py-3 text-sm font-mono text-zinc-600">{fmtPrice(row.cache_read_price)}</td>
-                    <td className="px-4 py-3 text-sm font-mono text-zinc-600">{fmtPrice(row.cache_write_price)}</td>
-                    <td className="px-4 py-3 text-sm">
-                      {(() => {
-                        const operationalStatus = (row.operational_status || '').toLowerCase();
-                        if (row.status === 'Draft') {
-                          return (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                              Draft
-                            </span>
-                          );
-                        }
-                        if (operationalStatus === 'offline' || operationalStatus === 'rate_limited') {
-                          return (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-50 text-red-700 border border-red-200">
-                              {operationalStatus === 'rate_limited' ? 'Rate Limited' : 'Offline'}
-                            </span>
-                          );
-                        }
-                        if (operationalStatus === 'deprecated') {
-                          return (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-zinc-100 text-zinc-600 border border-zinc-200">
-                              Deprecated
-                            </span>
-                          );
-                        }
-                        return (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            {operationalStatus === 'online' ? 'Online' : 'Published'}
-                          </span>
-                        );
-                      })()}
-                      {row.is_top_provider && (
-                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border border-blue-200 bg-blue-50 text-blue-700">
-                          Top
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-zinc-500">{fmtAge(row.updated_at)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="inline-flex items-center gap-1">
-                        <button onClick={() => openEditDrawer(row)} className="px-2 py-1 text-xs font-semibold border rounded hover:bg-white">Edit</button>
-                        <button onClick={() => deleteDraft(row)} disabled={row.status !== 'Draft'} className="px-2 py-1 text-xs font-semibold text-red-600 border border-red-200 rounded hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed">Delete</button>
-                        <button onClick={() => openHistory(row)} className="px-2 py-1 text-xs font-semibold border rounded hover:bg-white">History</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="flex items-center justify-between gap-3 px-4 py-3 border-t bg-gray-50/40">
-          <p className="text-xs text-zinc-500">{tableRows.length} items</p>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage <= 1}
-              className="p-1.5 border rounded disabled:opacity-40"
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <span className="text-xs text-zinc-600">Page {currentPage} / {totalPages}</span>
-            <button
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage >= totalPages}
-              className="p-1.5 border rounded disabled:opacity-40"
-            >
-              <ChevronRight size={14} />
-            </button>
-          </div>
-        </div>
-      </div>
+      <PricingTable 
+        loading={loading}
+        pagedRows={pagedRows}
+        tableRowsCount={tableRows.length}
+        hasProviders={providers.length > 0}
+        onSort={onSort}
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        totalPages={totalPages}
+        openEditDrawer={openEditDrawer}
+        deleteDraft={deleteDraft}
+        openHistory={openHistory}
+      />
 
       {showHistory && (
         <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-5">
@@ -653,291 +390,47 @@ export default function PricingView() {
         </div>
       )}
 
-      {preview && (
-        <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-5">
-          <h3 className="font-semibold mb-2">Preview Changes</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-            <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
-              <p className="text-zinc-500">Affected models</p>
-              <p className="font-semibold text-zinc-900">{preview.affected_models ?? 0}</p>
-            </div>
-            <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
-              <p className="text-zinc-500">Changes</p>
-              <p className="font-semibold text-zinc-900">{preview.changes_count ?? 0}</p>
-            </div>
-            <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
-              <p className="text-zinc-500">Estimated profit</p>
-              <p className="font-semibold text-zinc-900">{preview.estimated_profit_margin == null ? '-' : `${preview.estimated_profit_margin}%`}</p>
-            </div>
-          </div>
-        </div>
-      )}
+      <ProviderAccountModal 
+        isOpen={providerDrawerOpen}
+        onClose={() => setProviderDrawerOpen(false)}
+        onSuccess={handleProviderSuccess}
+      />
 
-      {providerDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setProviderDrawerOpen(false)} />
-          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-            <div className="px-5 py-4 border-b flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-lg">Add Provider Account</h3>
-                <p className="text-xs text-zinc-500 mt-0.5">Register a new upstream provider to bind pricing rules to.</p>
-              </div>
-              <button onClick={() => setProviderDrawerOpen(false)} className="p-2 rounded-md hover:bg-zinc-100"><X size={18} /></button>
-            </div>
-            <div className="flex-1 overflow-auto px-5 py-5 space-y-4">
-              <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-                A <strong>Provider Account</strong> represents a single upstream API account (e.g. your OpenAI org key). Each price rule must be linked to one.
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Display Name <span className="text-red-400">*</span></label>
-                <input
-                  value={newProvider.label}
-                  onChange={(e) => {
-                    const label = e.target.value;
-                    const slug = label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-                    setNewProvider(prev => ({
-                      ...prev,
-                      label,
-                      provider: slug,
-                      base_url: slug ? `https://api.${slug}.com/v1` : prev.base_url
-                    }));
-                  }}
-                  placeholder="e.g. OpenAI (Production)"
-                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:border-black focus:ring-4 focus:ring-black/5"
-                />
-                <p className="text-xs text-zinc-400">Human-readable name shown in the UI.</p>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Protocol <span className="text-red-400">*</span></label>
-                <div className="relative">
-                  <Select
-                    value={newProvider.driver_type}
-                    onChange={(val) => {
-                      const updates: Record<string, string> = { driver_type: val };
-                      if (val === 'anthropic' && newProvider.base_url === 'https://api.openai.com/v1') {
-                        updates.base_url = 'https://api.anthropic.com/v1';
-                        updates.docs_url = 'https://docs.anthropic.com/en/api/getting-started';
-                      } else if (val === 'openai_compatible' && newProvider.base_url === 'https://api.anthropic.com/v1') {
-                        updates.base_url = 'https://api.openai.com/v1';
-                        updates.docs_url = 'https://platform.openai.com/docs';
-                      }
-                      setNewProvider(prev => ({...prev, ...updates}));
-                    }}
-                    options={[
-                      { value: 'openai_compatible', label: 'OpenAI Compatible' },
-                      { value: 'anthropic', label: 'Anthropic' }
-                    ]}
-                  />
-                </div>
-                <p className="text-xs text-zinc-400">The protocol/driver to use for upstream API.</p>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Base URL</label>
-                <input
-                  value={newProvider.base_url}
-                  onChange={(e) => setNewProvider({...newProvider, base_url: e.target.value})}
-                  placeholder="https://api.openai.com/v1"
-                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:border-black focus:ring-4 focus:ring-black/5"
-                />
-                <p className="text-xs text-zinc-400">The API endpoint the gateway will forward requests to.</p>
-              </div>
-
-
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">API Key <span className="text-red-400">*</span></label>
-                <input
-                  type="password"
-                  value={newProvider.key}
-                  onChange={(e) => setNewProvider({...newProvider, key: e.target.value})}
-                  placeholder="sk-..."
-                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:border-black focus:ring-4 focus:ring-black/5"
-                />
-                <p className="text-xs text-zinc-400">Stored encrypted. Used by the gateway to authenticate upstream requests.</p>
-              </div>
-            </div>
-            <div className="border-t px-5 py-4 bg-white">
-              <button
-                onClick={saveProvider}
-                disabled={providerSaving || !newProvider.provider.trim() || !newProvider.key.trim()}
-                className="w-full bg-black text-white rounded-lg px-4 py-2 font-semibold disabled:opacity-50"
-              >
-                {providerSaving ? 'Saving...' : 'Save Provider Account'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {drawerOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDrawerOpen(false)} />
-          <div className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-            <div className="px-5 py-4 border-b flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-lg">{model ? 'Edit Price' : 'New Price'}</h3>
-                <p className="text-xs text-zinc-500 mt-0.5">Provider-bound draft editor</p>
-              </div>
-              <button onClick={() => setDrawerOpen(false)} className="p-2 rounded-md hover:bg-zinc-100"><X size={18} /></button>
-            </div>
-
-            <div className="px-5 pt-4 border-b">
-              <div className="inline-flex p-1 bg-zinc-100 rounded-lg text-sm font-medium">
-                <button onClick={() => setDrawerTab('quick')} className={`px-3 py-1.5 rounded-md ${drawerTab === 'quick' ? 'bg-white shadow-sm' : 'text-zinc-500'}`}>Quick Pricing</button>
-                <button onClick={() => setDrawerTab('batch')} className={`px-3 py-1.5 rounded-md ${drawerTab === 'batch' ? 'bg-white shadow-sm' : 'text-zinc-500'}`}>Batch Rules</button>
-                <button onClick={() => setDrawerTab('advanced')} className={`px-3 py-1.5 rounded-md ${drawerTab === 'advanced' ? 'bg-white shadow-sm' : 'text-zinc-500'}`}>Advanced</button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-auto px-5 py-4 space-y-4">
-              {drawerTab === 'quick' && (
-                <>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Model ID</label>
-                    <input
-                      value={model}
-                      onChange={(e) => setModel(e.target.value)}
-                      placeholder="openai/gpt-4o"
-                      className="w-full px-3 py-2 border rounded-lg"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Provider Account</label>
-                    <Select
-                      value={providerAccountId}
-                      onChange={(val) => setProviderAccountId(val)}
-                      options={[{ value: '', label: 'Select provider account (required)' }, ...providers.map(p => ({ value: p, label: p }))]}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Input $/1M</label>
-                      <input value={inputPrice} onChange={(e) => setInputPrice(e.target.value)} type="number" min="0" step="0.000001" className="w-full px-3 py-2 border rounded-lg" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Output $/1M</label>
-                      <input value={outputPrice} onChange={(e) => setOutputPrice(e.target.value)} type="number" min="0" step="0.000001" className="w-full px-3 py-2 border rounded-lg" />
-                    </div>
-                  </div>
-
-                  <button onClick={() => setShowCacheFields((v) => !v)} className="text-sm font-semibold text-zinc-600 hover:text-black">
-                    {showCacheFields ? 'Hide' : 'Show'} cache read/write
-                  </button>
-
-                  {showCacheFields && (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Cache Read $/1M</label>
-                        <input value={cacheReadPrice} onChange={(e) => setCacheReadPrice(e.target.value)} type="number" min="0" step="0.000001" className="w-full px-3 py-2 border rounded-lg" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Cache Write $/1M</label>
-                        <input value={cacheWritePrice} onChange={(e) => setCacheWritePrice(e.target.value)} type="number" min="0" step="0.000001" className="w-full px-3 py-2 border rounded-lg" />
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Reasoning $/1M</label>
-                      <input value={reasoningPrice} onChange={(e) => setReasoningPrice(e.target.value)} type="number" min="0" step="0.000001" className="w-full px-3 py-2 border rounded-lg" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Context Length</label>
-                      <input value={contextLength} onChange={(e) => setContextLength(e.target.value)} type="number" min="0" step="1" className="w-full px-3 py-2 border rounded-lg" />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Latency (ms)</label>
-                    <input value={latencyMs} onChange={(e) => setLatencyMs(e.target.value)} type="number" min="0" step="1" className="w-full px-3 py-2 border rounded-lg" />
-                  </div>
-                  <label className="inline-flex items-center gap-2 text-sm text-zinc-700">
-                    <input type="checkbox" checked={isTopProvider} onChange={(e) => setIsTopProvider(e.target.checked)} />
-                    Top provider for this model
-                  </label>
-                </>
-              )}
-
-              {drawerTab === 'batch' && (
-                <div className="space-y-4">
-                  <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
-                    Batch Rules is intentionally kept as L2. Configure a base provider and percentage, then save as draft entries by model scope.
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <input value={providerAccountId} onChange={(e) => setProviderAccountId(e.target.value)} placeholder="provider account" className="px-3 py-2 border rounded-lg" />
-                    <input value={markupRate} onChange={(e) => setMarkupRate(e.target.value)} placeholder="markup % (optional)" type="number" className="px-3 py-2 border rounded-lg" />
-                  </div>
-                </div>
-              )}
-
-              {drawerTab === 'advanced' && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Price Mode</label>
-                    <Select
-                      value={formPriceMode}
-                      onChange={(val) => setFormPriceMode(val as 'fixed' | 'markup')}
-                      options={[
-                        { value: 'fixed', label: 'Fixed' },
-                        { value: 'markup', label: 'Markup' }
-                      ]}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Model ID</label>
-                    <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="model id" className="w-full px-3 py-2 border rounded-lg" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Provider Account</label>
-                    <Select
-                      value={providerAccountId}
-                      onChange={(val) => setProviderAccountId(val)}
-                      options={[{ value: '', label: 'Select provider account (required)' }, ...providers.map(p => ({ value: p, label: p }))]}
-                    />
-                  </div>
-                  {formPriceMode === 'markup' ? (
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">Markup Rate</label>
-                      <input value={markupRate} onChange={(e) => setMarkupRate(e.target.value)} type="number" step="0.0001" className="w-full px-3 py-2 border rounded-lg" />
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-3">
-                      <input value={inputPrice} onChange={(e) => setInputPrice(e.target.value)} type="number" step="0.000001" placeholder="input /1M" className="px-3 py-2 border rounded-lg" />
-                      <input value={outputPrice} onChange={(e) => setOutputPrice(e.target.value)} type="number" step="0.000001" placeholder="output /1M" className="px-3 py-2 border rounded-lg" />
-                    </div>
-                  )}
-                  <div className="grid grid-cols-3 gap-3">
-                    <input value={reasoningPrice} onChange={(e) => setReasoningPrice(e.target.value)} type="number" step="0.000001" placeholder="reasoning /1M" className="px-3 py-2 border rounded-lg" />
-                    <input value={contextLength} onChange={(e) => setContextLength(e.target.value)} type="number" step="1" placeholder="context length" className="px-3 py-2 border rounded-lg" />
-                    <input value={latencyMs} onChange={(e) => setLatencyMs(e.target.value)} type="number" step="1" placeholder="latency ms" className="px-3 py-2 border rounded-lg" />
-                  </div>
-                  <label className="inline-flex items-center gap-2 text-sm text-zinc-700">
-                    <input type="checkbox" checked={isTopProvider} onChange={(e) => setIsTopProvider(e.target.checked)} />
-                    Top provider for this model
-                  </label>
-                </div>
-              )}
-
-              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-                <p className="text-xs uppercase tracking-widest font-bold text-zinc-400">Preview Card</p>
-                <p className="text-sm text-zinc-700 mt-2">Effective price: input {inputPrice ? `$${Number(inputPrice).toFixed(2)}` : '-'} / output {outputPrice ? `$${Number(outputPrice).toFixed(2)}` : '-'}</p>
-                <p className="text-sm text-zinc-500 mt-1">Estimated margin: {preview?.estimated_profit_margin == null ? '-' : `${preview.estimated_profit_margin}%`}</p>
-              </div>
-            </div>
-
-            <div className="border-t px-5 py-4 bg-white space-y-2">
-              <div className="flex items-center gap-2">
-                <button onClick={saveDraft} disabled={busy || providers.length === 0} className="flex-1 bg-black text-white rounded-lg px-4 py-2 font-semibold disabled:opacity-50">Save Draft</button>
-                <button onClick={handlePreview} disabled={busy} className="px-3 py-2 rounded-lg border text-sm font-semibold">Preview Changes</button>
-                <button onClick={handlePublish} disabled={busy || draft.length === 0} className="px-3 py-2 rounded-lg border border-black bg-black text-white text-sm font-semibold disabled:opacity-50">Publish</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <EditPriceModal 
+        isOpen={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        drawerTab={drawerTab}
+        setDrawerTab={setDrawerTab}
+        model={model} setModel={setModel}
+        modelQuery={modelQuery} setModelQuery={setModelQuery}
+        providerAccountId={providerAccountId} setProviderAccountId={setProviderAccountId}
+        providerKeyId={providerKeyId} setProviderKeyId={setProviderKeyId}
+        formPriceMode={formPriceMode} setFormPriceMode={setFormPriceMode}
+        inputCost={inputCost} setInputCost={setInputCost}
+        outputCost={outputCost} setOutputCost={setOutputCost}
+        cacheReadCost={cacheReadCost} setCacheReadCost={setCacheReadCost}
+        cacheWriteCost={cacheWriteCost} setCacheWriteCost={setCacheWriteCost}
+        reasoningCost={reasoningCost} setReasoningCost={setReasoningCost}
+        inputPrice={inputPrice} setInputPrice={setInputPrice}
+        outputPrice={outputPrice} setOutputPrice={setOutputPrice}
+        cacheReadPrice={cacheReadPrice} setCacheReadPrice={setCacheReadPrice}
+        cacheWritePrice={cacheWritePrice} setCacheWritePrice={setCacheWritePrice}
+        reasoningPrice={reasoningPrice} setReasoningPrice={setReasoningPrice}
+        contextLength={contextLength} setContextLength={setContextLength}
+        latencyMs={latencyMs} setLatencyMs={setLatencyMs}
+        isTopProvider={isTopProvider} setIsTopProvider={setIsTopProvider}
+        markupRate={markupRate} setMarkupRate={setMarkupRate}
+        providerKeyRows={providerKeyRows}
+        globalModels={globalModels}
+        discountRate={discountRate} setDiscountRate={setDiscountRate}
+        providers={providers}
+        busy={busy}
+        draftCount={draft.length}
+        handlePreview={handlePreview}
+        saveDraft={saveDraft}
+        handlePublish={handlePublish}
+        preview={preview}
+      />
     </div>
   );
 }

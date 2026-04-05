@@ -35,7 +35,7 @@ export default function Navbar() {
 
   return (
     <nav className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-sm border-b border-gray-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-14 items-center">
           <Link to="/models" className="flex items-center gap-2.5 cursor-pointer group">
             <div className="w-7 h-7 bg-black rounded flex items-center justify-center transition-transform group-hover:scale-105">

@@ -17,6 +17,9 @@ export type PricingDraftUpsertRequest = {
   price_mode: 'fixed' | 'markup';
   input_cost?: number | null;
   output_cost?: number | null;
+  cache_read_cost?: number | null;
+  cache_write_cost?: number | null;
+  reasoning_cost?: number | null;
   input_price?: number | null;
   output_price?: number | null;
   cache_read_price?: number | null;
@@ -28,6 +31,7 @@ export type PricingDraftUpsertRequest = {
   latency_ms?: number | null;
   is_top_provider?: boolean | null;
   status?: string;
+  provider_key_id?: string | null;
 };
 
 export type AuthUser = {

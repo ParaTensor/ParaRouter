@@ -79,8 +79,8 @@ pub struct NewUserApiKeyRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct ProviderKeyRequest {
-    key: String,
-    status: Option<String>,
+    pub key: Option<String>,
+    pub status: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -454,14 +454,11 @@ pub async fn upsert_provider_key(
     Path(provider): Path<String>,
     Json(payload): Json<ProviderKeyRequest>,
 ) -> impl IntoResponse {
-    if payload.key.trim().is_empty() {
-        return error_response(StatusCode::BAD_REQUEST, "key required", "invalid_request")
-            .into_response();
-    }
     let status = payload.status.unwrap_or_else(|| "active".to_string());
+    let key_val = payload.key.unwrap_or_default();
     if let Err(err) = state
         .db_pool
-        .upsert_provider_key(&provider, &payload.key, &status)
+        .upsert_provider_key(&provider, &key_val, &status)
         .await
     {
         return error_response(
