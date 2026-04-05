@@ -3,6 +3,7 @@ import {Plus, Copy, Trash2, Eye, EyeOff, ShieldCheck, Check, X, Loader2} from 'l
 import {motion, AnimatePresence} from 'motion/react';
 import {apiDelete, apiGet, apiPost} from '../lib/api';
 import {localUser} from '../lib/session';
+import { useTranslation } from "react-i18next";
 
 interface APIKey {
   id: string;
@@ -15,6 +16,7 @@ interface APIKey {
 }
 
 export default function KeysView() {
+    const { t } = useTranslation();
   const [keys, setKeys] = useState<APIKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [showKey, setShowKey] = useState<string | null>(null);
@@ -85,24 +87,21 @@ export default function KeysView() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">API Keys</h1>
-          <p className="text-gray-500 mt-1">Manage your API keys to authenticate with OpenHub.</p>
+          <h1 className="text-3xl font-bold tracking-tight">{t('keys.api_keys')}</h1>
+          <p className="text-gray-500 mt-1">{t('keys.manage_your_api_keys_to_authen')}</p>
         </div>
         <button
           onClick={() => setIsModalOpen(true)}
           className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-all active:scale-95"
         >
           <Plus size={18} />
-          Create Key
-        </button>
+          {t('keys.create_key')}</button>
       </div>
 
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex gap-3 text-zinc-300">
         <ShieldCheck className="shrink-0 text-emerald-500" size={20} />
         <p className="text-sm">
-          Your API keys are sensitive information. Never share them or commit them to version control.
-          OpenHub will only show the full key once upon creation.
-        </p>
+          {t('keys.your_api_keys_are_sensitive_in')}</p>
       </div>
 
       <div className="bg-white border rounded-xl overflow-hidden shadow-sm">
@@ -110,11 +109,11 @@ export default function KeysView() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-gray-50/50 border-b">
-                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Name</th>
-                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Key</th>
-                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Usage</th>
-                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Created</th>
-                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest text-right">Actions</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('keys.name')}</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('keys.key')}</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('keys.usage')}</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('keys.created')}</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest text-right">{t('keys.actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -159,8 +158,7 @@ export default function KeysView() {
               {keys.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center text-zinc-400 text-sm">
-                    No API keys found. Create one to get started.
-                  </td>
+                    {t('keys.no_api_keys_found_create_one_t')}</td>
                 </tr>
               )}
             </tbody>
@@ -178,14 +176,14 @@ export default function KeysView() {
               className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
             >
               <div className="px-6 py-4 border-b flex items-center justify-between">
-                <h3 className="font-bold text-lg">Create API Key</h3>
+                <h3 className="font-bold text-lg">{t('keys.create_api_key')}</h3>
                 <button onClick={() => setIsModalOpen(false)} className="p-1 hover:bg-gray-100 rounded-lg transition-colors">
                   <X size={20} className="text-gray-400" />
                 </button>
               </div>
               <div className="p-6 space-y-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700 uppercase tracking-wider">Key Name</label>
+                  <label className="text-sm font-bold text-gray-700 uppercase tracking-wider">{t('keys.key_name')}</label>
                   <input
                     autoFocus
                     type="text"
@@ -197,20 +195,17 @@ export default function KeysView() {
                   />
                 </div>
                 <p className="text-xs text-gray-500 leading-relaxed">
-                  Give your key a descriptive name to help you identify it later. You can create multiple keys for different projects.
-                </p>
+                  {t('keys.give_your_key_a_descriptive_na')}</p>
               </div>
               <div className="px-6 py-4 bg-gray-50 flex gap-3">
                 <button onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-2.5 border rounded-xl font-bold text-sm hover:bg-white transition-all">
-                  Cancel
-                </button>
+                  {t('keys.cancel')}</button>
                 <button
                   onClick={handleCreateKey}
                   disabled={!newKeyName.trim()}
                   className="flex-1 px-4 py-2.5 bg-black text-white rounded-xl font-bold text-sm hover:bg-zinc-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Create Key
-                </button>
+                  {t('keys.create_key')}</button>
               </div>
             </motion.div>
           </div>

@@ -3,6 +3,7 @@ import {AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContain
 import {Calendar, Download, Zap, TrendingUp, Clock, DollarSign, Loader2} from 'lucide-react';
 import {apiGet} from '../lib/api';
 import {localUser} from '../lib/session';
+import { useTranslation } from "react-i18next";
 
 const initialData = [
   {date: 'Mar 23', tokens: 45000, cost: 0.12},
@@ -23,6 +24,7 @@ const initialLogs = [
 ];
 
 export default function ActivityView() {
+    const { t } = useTranslation();
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const isAdmin = localUser.role === 'admin';
@@ -46,7 +48,7 @@ export default function ActivityView() {
             model: row.model,
             tokens: row.tokens || 0,
             cost: row.cost || '$0.00',
-            status: row.status === 200 ? 'Success' : 'Error',
+            status: row.status === 200 ? t('activity.success') : t('activity.error'),
             latency: `${((row.latency || 0) / 1000).toFixed(1)}s`,
           };
         });
@@ -74,18 +76,16 @@ export default function ActivityView() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Activity</h1>
-          <p className="text-gray-500 mt-1">Monitor your usage and spending across all models on OpenHub.</p>
+          <h1 className="text-3xl font-bold tracking-tight">{t('activity.activity')}</h1>
+          <p className="text-gray-500 mt-1">{t('activity.monitor_your_usage_and_spendin')}</p>
         </div>
         <div className="flex items-center gap-2">
           <button className="flex items-center gap-2 border border-gray-200 bg-white px-4 py-2 rounded-lg text-sm font-bold hover:border-black transition-all">
             <Calendar size={16} />
-            Last 7 Days
-          </button>
+            {t('activity.last_7_days')}</button>
           <button className="flex items-center gap-2 border border-gray-200 bg-white px-4 py-2 rounded-lg text-sm font-bold hover:border-black transition-all">
             <Download size={16} />
-            Export
-          </button>
+            {t('activity.export')}</button>
         </div>
       </div>
 
@@ -93,46 +93,46 @@ export default function ActivityView() {
         <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm">
           <div className="flex items-center gap-2 text-zinc-400 mb-2">
             <Zap size={14} />
-            <p className="text-[11px] font-bold uppercase tracking-widest">Total Tokens</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest">{t('activity.total_tokens')}</p>
           </div>
           <h3 className="text-3xl font-bold tracking-tight">
             {logs.reduce((acc, log) => acc + (typeof log.tokens === 'number' ? log.tokens : 0), 0).toLocaleString()}
           </h3>
           <div className="flex items-center gap-1.5 mt-2">
             <TrendingUp size={12} className="text-emerald-500" />
-            <span className="text-xs font-bold text-emerald-600">+12%</span>
-            <span className="text-[10px] text-zinc-400 font-medium">vs last week</span>
+            <span className="text-xs font-bold text-emerald-600">{t('activity.12')}</span>
+            <span className="text-[10px] text-zinc-400 font-medium">{t('activity.vs_last_week')}</span>
           </div>
         </div>
         <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm">
           <div className="flex items-center gap-2 text-zinc-400 mb-2">
             <DollarSign size={14} />
-            <p className="text-[11px] font-bold uppercase tracking-widest">Total Cost</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest">{t('activity.total_cost')}</p>
           </div>
-          <h3 className="text-3xl font-bold tracking-tight">$1.62</h3>
+          <h3 className="text-3xl font-bold tracking-tight">{t('activity.1_62')}</h3>
           <div className="flex items-center gap-1.5 mt-2">
             <TrendingUp size={12} className="text-emerald-500" />
-            <span className="text-xs font-bold text-emerald-600">+8%</span>
-            <span className="text-[10px] text-zinc-400 font-medium">vs last week</span>
+            <span className="text-xs font-bold text-emerald-600">{t('activity.8')}</span>
+            <span className="text-[10px] text-zinc-400 font-medium">{t('activity.vs_last_week')}</span>
           </div>
         </div>
         <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm">
           <div className="flex items-center gap-2 text-zinc-400 mb-2">
             <Clock size={14} />
-            <p className="text-[11px] font-bold uppercase tracking-widest">Avg. Latency</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest">{t('activity.avg_latency')}</p>
           </div>
-          <h3 className="text-3xl font-bold tracking-tight">1.2s</h3>
+          <h3 className="text-3xl font-bold tracking-tight">{t('activity.1_2s')}</h3>
           <div className="flex items-center gap-1.5 mt-2">
             <TrendingUp size={12} className="text-red-500 rotate-180" />
-            <span className="text-xs font-bold text-red-600">+5%</span>
-            <span className="text-[10px] text-zinc-400 font-medium">vs last week</span>
+            <span className="text-xs font-bold text-red-600">{t('activity.5')}</span>
+            <span className="text-[10px] text-zinc-400 font-medium">{t('activity.vs_last_week')}</span>
           </div>
         </div>
       </div>
 
       <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm">
         <div className="flex items-center justify-between mb-8">
-          <h3 className="font-bold text-sm uppercase tracking-widest text-zinc-400">Token Usage History</h3>
+          <h3 className="font-bold text-sm uppercase tracking-widest text-zinc-400">{t('activity.token_usage_history')}</h3>
         </div>
         <div className="h-[300px] w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -163,18 +163,18 @@ export default function ActivityView() {
 
       <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
         <div className="px-6 py-4 border-b border-gray-50 flex items-center justify-between">
-          <h3 className="font-bold text-sm uppercase tracking-widest text-zinc-400">Recent Requests</h3>
+          <h3 className="font-bold text-sm uppercase tracking-widest text-zinc-400">{t('activity.recent_requests')}</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-gray-50/50 border-b border-gray-50">
-                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Time</th>
-                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Model</th>
-                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Tokens</th>
-                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Latency</th>
-                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Cost</th>
-                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Status</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('activity.time')}</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('activity.model')}</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('activity.tokens')}</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('activity.latency')}</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('activity.cost')}</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('activity.status')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">

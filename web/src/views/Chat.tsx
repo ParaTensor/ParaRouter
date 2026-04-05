@@ -2,6 +2,7 @@ import React from 'react';
 import { Send, Plus, Search, MessageSquare, Trash2, MoreVertical, User, Bot, Sparkles, ChevronRight, Settings2, Paperclip, Zap, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { useTranslation } from "react-i18next";
 
 interface Message {
   id: string;
@@ -17,11 +18,7 @@ interface ChatSession {
   timestamp: string;
 }
 
-const initialSessions: ChatSession[] = [
-  { id: '1', title: 'Rust Backend Optimization', lastMessage: 'How can I optimize Axum...', timestamp: '2m ago' },
-  { id: '2', title: 'OpenHub Architecture', lastMessage: 'The management layer should...', timestamp: '1h ago' },
-  { id: '3', title: 'Tailwind 4 Features', lastMessage: 'What are the main changes...', timestamp: 'Yesterday' },
-];
+
 
 const models = [
   'Claude 3.5 Sonnet',
@@ -32,12 +29,20 @@ const models = [
 ];
 
 export default function ChatView() {
+    const { t } = useTranslation();
   const [input, setInput] = React.useState('');
+  
+  const initialSessions: ChatSession[] = [
+    { id: '1', title: 'Rust Backend Optimization', lastMessage: 'How can I optimize Axum...', timestamp: t('pricingtable.m_ago', { minutes: 2 }) },
+    { id: '2', title: 'OpenHub Architecture', lastMessage: 'The management layer should...', timestamp: t('pricingtable.h_ago', { hours: 1 }) },
+    { id: '3', title: 'Tailwind 4 Features', lastMessage: 'What are the main changes...', timestamp: t('chat.yesterday') },
+  ];
+
   const [messages, setMessages] = React.useState<Message[]>([
     {
       id: '1',
       role: 'assistant',
-      content: 'Hello! I\'m the OpenHub assistant. How can I help you with your AI models today?',
+      content: t('chat.assistant_greeting'),
       timestamp: '10:00 AM'
     }
   ]);
@@ -64,7 +69,7 @@ export default function ChatView() {
       const assistantResponse: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `This is a mock response from OpenHub using ${selectedModel}. In a real integration, this would be routed through OpenGateway to your selected model.`,
+        content: t('chat.mock_response', { model: selectedModel }),
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setMessages(prev => [...prev, assistantResponse]);
@@ -85,19 +90,18 @@ export default function ChatView() {
             <div className="p-4 border-b border-gray-50 flex flex-col gap-4">
               <button 
                 onClick={() => {
-                  setMessages([{ id: '1', role: 'assistant', content: 'New chat started. How can I help?', timestamp: 'Just now' }]);
+                  setMessages([{ id: '1', role: 'assistant', content: t('chat.new_chat_started'), timestamp: t('chat.just_now') }]);
                   setActiveSessionId(Math.random().toString());
                 }}
                 className="flex items-center justify-center gap-2 w-full bg-black text-white py-2.5 rounded-xl font-bold text-sm hover:bg-zinc-800 transition-all active:scale-95 shadow-lg shadow-black/5"
               >
                 <Plus size={18} />
-                New Chat
-              </button>
+                {t('chat.new_chat')}</button>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={14} />
                 <input 
                   type="text" 
-                  placeholder="Search chats..."
+                  placeholder={t('chat.placeholder_search')}
                   className="w-full pl-9 pr-4 py-2 bg-white border border-zinc-200 rounded-xl text-xs focus:outline-none focus:ring-4 focus:ring-black/5 transition-all"
                 />
               </div>
@@ -153,10 +157,10 @@ export default function ChatView() {
                 <Sparkles size={20} />
               </div>
               <div>
-                <h3 className="font-bold text-sm">OpenHub Assistant</h3>
+                <h3 className="font-bold text-sm">{t('chat.openhub_assistant')}</h3>
                 <div className="flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">System Online</span>
+                  <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">{t('chat.system_online')}</span>
                 </div>
               </div>
             </div>
@@ -249,7 +253,7 @@ export default function ChatView() {
                   handleSend();
                 }
               }}
-              placeholder={`Message ${selectedModel}...`}
+              placeholder={t('chat.placeholder_message', { model: selectedModel })}
               className="w-full pl-24 pr-14 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-black/5 transition-all resize-none min-h-[60px] max-h-[200px]"
               rows={1}
             />
@@ -262,8 +266,7 @@ export default function ChatView() {
             </button>
           </div>
           <p className="text-center text-[10px] text-zinc-400 mt-4 font-medium uppercase tracking-widest">
-            OpenHub uses multiple models. Responses may vary in accuracy.
-          </p>
+            {t('chat.openhub_uses_multiple_models_r')}</p>
         </div>
       </div>
     </div>

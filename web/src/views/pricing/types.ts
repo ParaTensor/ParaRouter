@@ -44,13 +44,6 @@ export type PricingPreview = {
   estimated_profit_margin?: number | null;
 };
 
-export type PricingRelease = {
-  version: string;
-  status: string;
-  operator: string;
-  created_at: number;
-};
-
 export type SortKey = 'model' | 'provider' | 'input' | 'output' | 'final' | 'status' | 'updated';
 
 export type PriceRange = 'all' | 'lt1' | '1to10' | 'gte10';

@@ -1,7 +1,9 @@
 import React from 'react';
 import { Trophy, TrendingUp, Zap, DollarSign, Award } from 'lucide-react';
+import { useTranslation } from "react-i18next";
 
 export default function RankingsView() {
+    const { t } = useTranslation();
   const rankings = [
     {
       id: '1',
@@ -47,13 +49,10 @@ export default function RankingsView() {
         <div className="space-y-2">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold uppercase tracking-widest border border-amber-100">
             <Trophy size={12} />
-            Leaderboard
-          </div>
-          <h1 className="text-4xl font-black tracking-tight text-zinc-900">Model Rankings</h1>
+            {t('rankings.leaderboard')}</div>
+          <h1 className="text-4xl font-black tracking-tight text-zinc-900">{t('rankings.model_rankings')}</h1>
           <p className="text-zinc-500 max-w-xl">
-            The most comprehensive and up-to-date benchmarks for large language models, 
-            evaluated across 50+ diverse tasks.
-          </p>
+            {t('rankings.the_most_comprehensive_and_up_')}</p>
         </div>
         
         <div className="flex bg-white border border-zinc-100 rounded-xl p-1 shadow-sm">
@@ -74,30 +73,30 @@ export default function RankingsView() {
             <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
               <TrendingUp size={20} />
             </div>
-            <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Top Gainer</span>
+            <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">{t('rankings.top_gainer')}</span>
           </div>
-          <h3 className="text-sm font-bold text-zinc-500 mb-1">Claude 3.5 Sonnet</h3>
-          <p className="text-2xl font-black">+4.2 pts</p>
+          <h3 className="text-sm font-bold text-zinc-500 mb-1">{t('rankings.claude_3_5_sonnet')}</h3>
+          <p className="text-2xl font-black">{t('rankings.4_2_pts')}</p>
         </div>
         <div className="bg-white border border-zinc-100 rounded-2xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
               <Zap size={20} />
             </div>
-            <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Fastest</span>
+            <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">{t('rankings.fastest')}</span>
           </div>
-          <h3 className="text-sm font-bold text-zinc-500 mb-1">GPT-4o</h3>
-          <p className="text-2xl font-black">0.9s avg</p>
+          <h3 className="text-sm font-bold text-zinc-500 mb-1">{t('rankings.gpt_4o')}</h3>
+          <p className="text-2xl font-black">{t('rankings.0_9s_avg')}</p>
         </div>
         <div className="bg-white border border-zinc-100 rounded-2xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="p-2 bg-amber-50 text-amber-600 rounded-lg">
               <DollarSign size={20} />
             </div>
-            <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Best Value</span>
+            <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">{t('rankings.best_value')}</span>
           </div>
-          <h3 className="text-sm font-bold text-zinc-500 mb-1">Llama 3.1 70B</h3>
-          <p className="text-2xl font-black">$0.60 / 1M</p>
+          <h3 className="text-sm font-bold text-zinc-500 mb-1">{t('rankings.llama_3_1_70b')}</h3>
+          <p className="text-2xl font-black">{t('rankings.0_60_1m')}</p>
         </div>
       </div>
 
@@ -105,12 +104,12 @@ export default function RankingsView() {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="border-b border-zinc-50 bg-zinc-50/50">
-              <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Rank</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Model</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Provider</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-center">Score</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-center">Latency</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-right">Cost / 1M</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{t('rankings.rank')}</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{t('rankings.model')}</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{t('rankings.provider')}</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-center">{t('rankings.score')}</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-center">{t('rankings.latency')}</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-right">{t('rankings.cost_1m')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-50">

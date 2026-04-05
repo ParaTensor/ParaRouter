@@ -158,8 +158,82 @@ async function rebuildProviderTypesFromModels() {
 }
 
 router.get('/', async (_req, res) => {
-  const { rows } = await pool.query('SELECT * FROM models ORDER BY name ASC');
-  res.json(rows.map(mapModel));
+  const client = await pool.connect();
+  try {
+    const stateResult = await client.query('SELECT current_version FROM pricing_state WHERE id = 1');
+    const currentVersion = stateResult.rows[0]?.current_version || 'bootstrap';
+
+    const { rows } = await client.query(
+      `WITH latest_published AS (
+         SELECT model_id, provider_account_id, price_mode, input_price, output_price, 
+                cache_read_price, cache_write_price, reasoning_price, markup_rate, 
+                is_top_provider, context_length, latency_ms
+         FROM model_provider_pricings
+         WHERE version = $1 AND status = 'online'
+       ),
+       best_prices AS (
+         SELECT DISTINCT ON (model_id)
+           model_id, provider_account_id, price_mode, input_price, output_price, 
+           cache_read_price, cache_write_price, reasoning_price, markup_rate, 
+           context_length, latency_ms
+         FROM latest_published
+         ORDER BY model_id, is_top_provider DESC, input_price ASC NULLS LAST
+       )
+       SELECT 
+         lm.id, lm.name, pa.label as provider_label, lm.description, 
+         COALESCE(bp.context_length, lm.context_length) as context_length,
+         bp.price_mode, bp.markup_rate,
+         bp.input_price, bp.output_price, bp.cache_read_price, bp.cache_write_price, bp.reasoning_price,
+         bp.latency_ms,
+         lm.global_pricing
+       FROM best_prices bp
+       JOIN llm_models lm ON bp.model_id = lm.id
+       JOIN provider_accounts pa ON bp.provider_account_id = pa.id
+       ORDER BY lm.name ASC`,
+      [currentVersion]
+    );
+
+    const models = rows.map((row) => {
+      const getVal = (field: string, globalField: string) => {
+        if (row.price_mode === 'fixed') {
+          return row[field];
+        }
+        const base = row.global_pricing?.[globalField];
+        if (typeof base === 'number' && typeof row.markup_rate === 'number') {
+          return base * (1 + row.markup_rate);
+        }
+        return null;
+      };
+
+      const format = (v: number | null) => (typeof v === 'number' ? `$${v.toFixed(2)}` : null);
+
+      return {
+        id: row.id,
+        name: row.name,
+        provider: row.provider_label,
+        description: row.description || '',
+        context: row.context_length ? (row.context_length >= 1000 ? `${Math.round(row.context_length / 1000)}k` : row.context_length) : '',
+        pricing: {
+          prompt: format(getVal('input_price', 'prompt')) || '$0.00',
+          completion: format(getVal('output_price', 'completion')) || '$0.00',
+          cache_read: format(getVal('cache_read_price', 'cache_read')),
+          cache_write: format(getVal('cache_write_price', 'cache_write')),
+          reasoning: format(getVal('reasoning_price', 'reasoning')),
+        },
+        tags: [], // Could be derived from lm.tags if we add them to llm_models
+        isPopular: false,
+        latency: row.latency_ms ? `${(row.latency_ms / 1000).toFixed(1)}s` : '0.0s',
+        status: 'online',
+      };
+    });
+
+    res.json(models);
+  } catch (error) {
+    console.error('Failed to fetch models for home page:', error);
+    res.status(500).json({ error: 'internal_error' });
+  } finally {
+    client.release();
+  }
 });
 
 router.post('/sync', requireRole('admin'), async (req, res) => {

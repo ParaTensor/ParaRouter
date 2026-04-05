@@ -1,6 +1,7 @@
 import React from 'react';
 import {useParams, useNavigate} from 'react-router-dom';
 import {apiGet, apiPut} from '../lib/api';
+import { useTranslation } from "react-i18next";
 
 type PricingRow = {
   model: string;
@@ -30,6 +31,7 @@ type ModelProvidersResponse = {
 const fmtPrice = (value?: number | null) => (typeof value === 'number' ? `$${value.toFixed(2)}` : '-');
 
 export default function ModelProvidersView() {
+    const { t } = useTranslation();
   const {modelId = ''} = useParams();
   const navigate = useNavigate();
   const decodedModelId = decodeURIComponent(modelId);
@@ -68,12 +70,11 @@ export default function ModelProvidersView() {
     <div className="max-w-6xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Model Providers</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t('modelproviders.model_providers')}</h1>
           <p className="text-gray-500 mt-1">{decodedModelId}</p>
         </div>
         <button onClick={() => navigate('/pricing')} className="px-3 py-2 rounded-lg border text-sm font-semibold hover:bg-zinc-50">
-          Back to Pricing
-        </button>
+          {t('modelproviders.back_to_pricing')}</button>
       </div>
 
       <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
@@ -81,22 +82,22 @@ export default function ModelProvidersView() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-gray-50/70 border-b">
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Provider</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Input</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Output</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Reasoning</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Context</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Latency</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Mode</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Top</th>
-                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Routing Status</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('modelproviders.provider')}</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('modelproviders.input')}</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('modelproviders.output')}</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('modelproviders.reasoning')}</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('modelproviders.context')}</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('modelproviders.latency')}</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('modelproviders.mode')}</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('modelproviders.top')}</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('modelproviders.routing_status')}</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {loading ? (
-                <tr><td colSpan={9} className="px-4 py-10 text-center text-zinc-500 text-sm">Loading...</td></tr>
+                <tr><td colSpan={9} className="px-4 py-10 text-center text-zinc-500 text-sm">{t('modelproviders.loading')}</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-10 text-center text-zinc-500 text-sm">No provider pricing found for this model.</td></tr>
+                <tr><td colSpan={9} className="px-4 py-10 text-center text-zinc-500 text-sm">{t('modelproviders.no_provider_pricing_found_for_')}</td></tr>
               ) : (
                 rows.map((row, idx) => (
                   <tr key={`${row.provider_account_id || 'na'}-${idx}`} className="hover:bg-gray-50/50">
@@ -122,9 +123,9 @@ export default function ModelProvidersView() {
                         onChange={(e) => row.provider_account_id && updateRouting(row.provider_account_id, {status: e.target.value})}
                         className="px-2 py-1 border rounded text-xs bg-white"
                       >
-                        <option value="online">online</option>
-                        <option value="degraded">degraded</option>
-                        <option value="offline">offline</option>
+                        <option value="online">{t('modelproviders.online')}</option>
+                        <option value="degraded">{t('modelproviders.degraded')}</option>
+                        <option value="offline">{t('modelproviders.offline')}</option>
                       </select>
                     </td>
                   </tr>

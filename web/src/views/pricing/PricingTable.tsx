@@ -2,6 +2,7 @@ import React from 'react';
 import { ChevronRight, ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PricingTableRow, SortKey } from './types';
+import { useTranslation } from "react-i18next";
 
 interface PricingTableProps {
   loading: boolean;
@@ -14,7 +15,6 @@ interface PricingTableProps {
   totalPages: number;
   openEditDrawer: (row: PricingTableRow) => void;
   deleteDraft: (row: PricingTableRow) => void;
-  openHistory: (row: PricingTableRow) => void;
 }
 
 const rowKey = (row: {model: string; provider_account_id?: string | null; provider_key_id?: string}) => 
@@ -22,6 +22,7 @@ const rowKey = (row: {model: string; provider_account_id?: string | null; provid
 
 const fmtPrice = (value?: number | null) => (typeof value === 'number' ? `$${value.toFixed(2)}` : '-');
 const fmtNum = (value?: number | null) => (typeof value === 'number' ? String(value) : '-');
+const fmtContext = (value?: number | null) => (typeof value === 'number' ? `${value}K` : '-');
 const fmtLatency = (value?: number | null) => (typeof value === 'number' ? `${value}ms` : '-');
 
 const fmtMarkup = (value?: number | null) => {
@@ -41,23 +42,26 @@ const getFinalPrice = (row: Pick<PricingTableRow, 'price_mode' | 'input_price' |
   return null;
 };
 
-const fmtAge = (ts?: number) => {
-  if (!ts) return '-';
-  const diff = Math.max(0, Date.now() - ts);
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return 'Just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-};
+
 
 export default function PricingTable({
   loading, pagedRows, tableRowsCount, hasProviders, onSort,
   currentPage, setCurrentPage, totalPages,
-  openEditDrawer, deleteDraft, openHistory
+  openEditDrawer, deleteDraft
 }: PricingTableProps) {
+    const { t } = useTranslation();
   const navigate = useNavigate();
+
+  const fmtAge = (ts?: number) => {
+    if (!ts) return '-';
+    const diff = Math.max(0, Date.now() - ts);
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return t('pricingtable.just_now');
+    if (minutes < 60) return t('pricingtable.m_ago', { minutes });
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return t('pricingtable.h_ago', { hours });
+    return t('pricingtable.d_ago', { days: Math.floor(hours / 24) });
+  };
 
   return (
     <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
@@ -65,40 +69,37 @@ export default function PricingTable({
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-gray-50/70 border-b">
-              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('model')}>Model ID</th>
-              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('provider')}>Provider Account</th>
-              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('input')}>Input $/1M</th>
-              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('output')}>Output $/1M</th>
+              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('model')}>{t('pricingtable.model_id')}</th>
+              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('provider')}>{t('pricingtable.provider_account')}</th>
+              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('input')}>{t('pricingtable.input_1m')}</th>
+              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('output')}>{t('pricingtable.output_1m')}</th>
               <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('final')}>
-                <span title="Global × Markup = Final">Final Price</span>
+                <span title={t('pricingtable.tooltip_markup_final')}>{t('pricingtable.final_price')}</span>
               </th>
-              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Reasoning</th>
-              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Context</th>
-              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Latency</th>
-              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Cache Read</th>
-              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Cache Write</th>
-              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Group</th>
-              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('status')}>Status</th>
-              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('updated')}>Updated</th>
-              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest text-right">Actions</th>
+              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('pricingtable.reasoning')}</th>
+              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('pricingtable.context')}</th>
+              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('pricingtable.latency')}</th>
+              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('pricingtable.cache_read')}</th>
+              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('pricingtable.cache_write')}</th>
+              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('status')}>{t('pricingtable.status')}</th>
+              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer" onClick={() => onSort('updated')}>{t('pricingtable.updated')}</th>
+              <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest text-right">{t('pricingtable.actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {loading ? (
               <tr>
-                <td colSpan={15} className="px-3 py-12 text-center text-zinc-400 text-sm">Loading pricing...</td>
+                <td colSpan={15} className="px-3 py-12 text-center text-zinc-400 text-sm">{t('pricingtable.loading_pricing')}</td>
               </tr>
             ) : pagedRows.length === 0 ? (
               <tr>
                 <td colSpan={15} className="px-3 py-12 text-center text-zinc-400 text-sm">
                   {hasProviders ? (
-                    'No pricing configured yet. Create your first price.'
+                    t('pricingtable.no_pricing_yet')
                   ) : (
                     <span>
-                      No Provider Account yet.
-                      <br />
-                      Click <span className="font-semibold">+ Provider</span> in the toolbar to enable pricing.
-                    </span>
+                      {t('pricingtable.no_provider_account_yet')}<br />
+                      {t('pricingtable.click')}<span className="font-semibold">{t('pricingtable.provider')}</span> {t('pricingtable.in_the_toolbar_to_enable_prici')}</span>
                   )}
                 </td>
               </tr>
@@ -111,15 +112,10 @@ export default function PricingTable({
                     </button>
                   </td>
                   <td className="px-3 py-3 text-sm text-zinc-600">{row.provider_account_id || '-'}</td>
-                  <td className="px-3 py-3 text-sm">
-                    <span className="inline-flex px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600 text-[10px] font-bold tracking-tight uppercase">
-                      {row.provider_key_id || '-'}
-                    </span>
-                  </td>
                   <td className="px-3 py-3 text-sm font-mono text-zinc-800 whitespace-nowrap">{fmtPrice(row.input_price)}</td>
                   <td className="px-3 py-3 text-sm font-mono text-zinc-800 whitespace-nowrap">{fmtPrice(row.output_price)}</td>
                   <td className="px-3 py-3 text-sm font-mono font-semibold text-zinc-900 whitespace-nowrap">
-                    <span title={row.price_mode === 'markup' ? 'Global × Markup = Final' : 'Final effective price'}>
+                    <span title={row.price_mode === 'markup' ? t('pricingtable.tooltip_markup_final') : t('pricingtable.tooltip_final_effective')}>
                       {(() => {
                         const finalPrice = getFinalPrice(row);
                         if (typeof finalPrice === 'number') return fmtPrice(finalPrice);
@@ -128,7 +124,7 @@ export default function PricingTable({
                     </span>
                   </td>
                   <td className="px-3 py-3 text-sm font-mono text-zinc-700 whitespace-nowrap">{fmtPrice(row.reasoning_price)}</td>
-                  <td className="px-3 py-3 text-sm text-zinc-700 whitespace-nowrap">{fmtNum(row.context_length)}</td>
+                  <td className="px-3 py-3 text-sm text-zinc-700 whitespace-nowrap">{fmtContext(row.context_length)}</td>
                   <td className="px-3 py-3 text-sm text-zinc-700 whitespace-nowrap">{fmtLatency(row.latency_ms)}</td>
                   <td className="px-3 py-3 text-sm font-mono text-zinc-600 whitespace-nowrap">{fmtPrice(row.cache_read_price)}</td>
                   <td className="px-3 py-3 text-sm font-mono text-zinc-600 whitespace-nowrap">{fmtPrice(row.cache_write_price)}</td>
@@ -138,42 +134,34 @@ export default function PricingTable({
                       if (row.status === 'Draft') {
                         return (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                            Draft
-                          </span>
+                            {t('pricingtable.draft')}</span>
                         );
                       }
                       if (operationalStatus === 'offline' || operationalStatus === 'rate_limited') {
                         return (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-50 text-red-700 border border-red-200">
-                            {operationalStatus === 'rate_limited' ? 'Rate Limited' : 'Offline'}
+                            {operationalStatus === 'rate_limited' ? t('pricingtable.rate_limited') : t('pricingtable.offline')}
                           </span>
                         );
                       }
                       if (operationalStatus === 'deprecated') {
                         return (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-zinc-100 text-zinc-600 border border-zinc-200">
-                            Deprecated
-                          </span>
+                            {t('pricingtable.deprecated')}</span>
                         );
                       }
                       return (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          {operationalStatus === 'online' ? 'Online' : 'Published'}
+                          {operationalStatus === 'online' ? t('pricingtable.online') : t('pricingtable.published')}
                         </span>
                       );
                     })()}
-                    {row.is_top_provider && (
-                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border border-blue-200 bg-blue-50 text-blue-700">
-                        Top
-                      </span>
-                    )}
                   </td>
                   <td className="px-3 py-3 text-sm text-zinc-500">{fmtAge(row.updated_at)}</td>
                   <td className="px-3 py-3 text-right">
                     <div className="inline-flex items-center gap-1">
-                      <button onClick={() => openEditDrawer(row)} className="px-2 py-1 text-xs font-semibold border rounded hover:bg-white">Edit</button>
-                      <button onClick={() => deleteDraft(row)} disabled={row.status !== 'Draft'} className="px-2 py-1 text-xs font-semibold text-red-600 border border-red-200 rounded hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed">Delete</button>
-                      <button onClick={() => openHistory(row)} className="px-2 py-1 text-xs font-semibold border rounded hover:bg-white">History</button>
+                      <button onClick={() => openEditDrawer(row)} className="px-2 py-1 text-xs font-semibold border rounded hover:bg-white">{t('pricingtable.edit')}</button>
+                      <button onClick={() => deleteDraft(row)} disabled={row.status !== 'Draft'} className="px-2 py-1 text-xs font-semibold text-red-600 border border-red-200 rounded hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed">{t('pricingtable.delete')}</button>
                     </div>
                   </td>
                 </tr>
@@ -184,7 +172,7 @@ export default function PricingTable({
       </div>
 
       <div className="flex items-center justify-between gap-3 px-4 py-3 border-t bg-gray-50/40">
-        <p className="text-xs text-zinc-500">{tableRowsCount} items</p>
+        <p className="text-xs text-zinc-500">{tableRowsCount} {t('pricingtable.items')}</p>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
@@ -193,7 +181,7 @@ export default function PricingTable({
           >
             <ChevronLeft size={14} />
           </button>
-          <span className="text-xs text-zinc-600">Page {currentPage} / {totalPages}</span>
+          <span className="text-xs text-zinc-600">{t('pricingtable.page')}{currentPage} / {totalPages}</span>
           <button
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             disabled={currentPage >= totalPages}

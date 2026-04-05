@@ -1,6 +1,7 @@
 import React from 'react';
-import { LayoutGrid, Key, Activity, Settings, BookOpen, ExternalLink, Menu, X } from 'lucide-react';
+import { LayoutGrid, Key, Activity, Settings, BookOpen, ExternalLink, Menu, X, Globe } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useTranslation } from 'react-i18next';
 
 interface SidebarProps {
   activeTab: string;
@@ -8,14 +9,15 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { id: 'models', label: 'Models', icon: LayoutGrid },
-  { id: 'keys', label: 'Keys', icon: Key },
-  { id: 'activity', label: 'Activity', icon: Activity },
-  { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'models', labelKey: 'sidebar.models', icon: LayoutGrid },
+  { id: 'keys', labelKey: 'sidebar.keys', icon: Key },
+  { id: 'activity', labelKey: 'sidebar.activity', icon: Activity },
+  { id: 'settings', labelKey: 'sidebar.settings', icon: Settings },
 ];
 
 export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
   const [isOpen, setIsOpen] = React.useState(false);
+  const { t, i18n } = useTranslation();
 
   return (
     <>
@@ -39,7 +41,7 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
               <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
                 <div className="w-4 h-4 bg-white rounded-sm rotate-45" />
               </div>
-              <span className="font-bold text-xl tracking-tight">OpenRouter</span>
+              <span className="font-bold text-xl tracking-tight">{t('sidebar.openrouter')}</span>
             </div>
           </div>
 
@@ -60,7 +62,7 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
                 )}
               >
                 <item.icon size={18} />
-                {item.label}
+                {t(item.labelKey)}
               </button>
             ))}
           </nav>
@@ -72,15 +74,26 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
               className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-600 rounded-md hover:bg-gray-50 hover:text-black"
             >
               <BookOpen size={18} />
-              Docs
+              {t('sidebar.docs')}
             </a>
             <a 
               href="#" 
               className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-600 rounded-md hover:bg-gray-50 hover:text-black"
             >
               <ExternalLink size={18} />
-              Discord
+              {t('sidebar.discord')}
             </a>
+            <div className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-600 rounded-md">
+              <Globe size={18} />
+              <select 
+                value={i18n.language} 
+                onChange={(e) => i18n.changeLanguage(e.target.value)}
+                className="bg-transparent outline-none flex-1 cursor-pointer"
+              >
+                <option value="en">{t('sidebar.english')}</option>
+                <option value="zh">{t('sidebar.')}</option>
+              </select>
+            </div>
           </div>
 
           {/* User Profile (Mock) */}
@@ -88,8 +101,8 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
             <div className="flex items-center gap-3 px-3 py-2">
               <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-black truncate">lipeng.sh@gmail.com</p>
-                <p className="text-xs text-gray-500 truncate">$0.00 Credits</p>
+                <p className="text-sm font-medium text-black truncate">{t('sidebar.lipeng_sh_gmail_com')}</p>
+                <p className="text-xs text-gray-500 truncate">{t('sidebar.credits', { amount: '0.00' })}</p>
               </div>
             </div>
           </div>

@@ -286,6 +286,26 @@ router.post('/publish', async (req, res) => {
     );
     const affectedModels = Number(affectedResult.rows[0]?.count || 0);
 
+    // 1. Copy all rows from current version that are NOT being overwritten by draft
+    await client.query(
+      `INSERT INTO model_provider_pricings (
+         model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
+         reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, version, updated_at
+       )
+       SELECT model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
+              reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, $1, updated_at
+       FROM model_provider_pricings
+       WHERE version = $2
+         AND NOT EXISTS (
+           SELECT 1 FROM model_provider_pricings_draft d
+           WHERE d.model_id = model_provider_pricings.model_id
+             AND d.provider_account_id = model_provider_pricings.provider_account_id
+             AND d.provider_key_id = model_provider_pricings.provider_key_id
+         )`,
+      [version, currentVersion],
+    );
+
+    // 2. Insert all rows from draft into the new version
     if (draftCount > 0) {
       await client.query(
         `INSERT INTO model_provider_pricings (
@@ -297,6 +317,7 @@ router.post('/publish', async (req, res) => {
          FROM model_provider_pricings_draft`,
         [version],
       );
+      await client.query('DELETE FROM model_provider_pricings_draft');
     }
 
     await client.query(

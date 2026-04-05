@@ -1,8 +1,10 @@
 import React from 'react';
 import { Book, Code, Terminal, Zap, Shield, Globe, ChevronRight, Copy, Check } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useTranslation } from "react-i18next";
 
 export default function DocsView() {
+    const { t } = useTranslation();
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
 
   const copyToClipboard = (text: string, id: string) => {
@@ -43,13 +45,10 @@ export default function DocsView() {
       <div className="space-y-4">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-100 text-zinc-900 text-[10px] font-bold uppercase tracking-widest border border-zinc-200">
           <Book size={12} />
-          Documentation
-        </div>
-        <h1 className="text-5xl font-black tracking-tight text-zinc-900">Build with OpenHub</h1>
+          {t('docs.documentation')}</div>
+        <h1 className="text-5xl font-black tracking-tight text-zinc-900">{t('docs.build_with_openhub')}</h1>
         <p className="text-xl text-zinc-500 max-w-2xl leading-relaxed">
-          The unified control plane for high-performance LLM management. 
-          Integrate once, access everything.
-        </p>
+          {t('docs.the_unified_control_plane_for_')}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -77,18 +76,14 @@ export default function DocsView() {
 
       <div className="bg-zinc-900 rounded-3xl p-12 text-white overflow-hidden relative">
         <div className="relative z-10 space-y-6 max-w-xl">
-          <h2 className="text-3xl font-bold tracking-tight">Ready to scale?</h2>
+          <h2 className="text-3xl font-bold tracking-tight">{t('docs.ready_to_scale')}</h2>
           <p className="text-zinc-400 leading-relaxed">
-            Join thousands of developers building the future of AI with OpenHub. 
-            Our infrastructure is designed for high-throughput, low-latency production environments.
-          </p>
+            {t('docs.join_thousands_of_developers_b')}</p>
           <div className="flex gap-4 pt-4">
             <button className="bg-white text-black px-8 py-3 rounded-xl font-bold text-sm hover:bg-zinc-200 transition-all">
-              Get Started Free
-            </button>
+              {t('docs.get_started_free')}</button>
             <button className="px-8 py-3 border border-zinc-700 rounded-xl font-bold text-sm hover:bg-zinc-800 transition-all">
-              Contact Sales
-            </button>
+              {t('docs.contact_sales')}</button>
           </div>
         </div>
         <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-zinc-800/50 to-transparent pointer-events-none" />
@@ -97,7 +92,7 @@ export default function DocsView() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-12 pt-12 border-t border-zinc-100">
         <div className="space-y-6">
-          <h3 className="text-xl font-bold">API Reference</h3>
+          <h3 className="text-xl font-bold">{t('docs.api_reference')}</h3>
           <div className="space-y-4">
             {['Chat Completions', 'Models List', 'Usage Statistics', 'Key Management'].map((item, i) => (
               <button key={i} className="w-full flex items-center justify-between p-4 rounded-xl border border-zinc-50 hover:border-zinc-200 hover:bg-zinc-50 transition-all group">
@@ -108,7 +103,7 @@ export default function DocsView() {
           </div>
         </div>
         <div className="space-y-6">
-          <h3 className="text-xl font-bold">SDKs & Libraries</h3>
+          <h3 className="text-xl font-bold">{t('docs.sdks_libraries')}</h3>
           <div className="grid grid-cols-2 gap-4">
             {['Python', 'Node.js', 'Go', 'Rust'].map((item, i) => (
               <div key={i} className="p-6 rounded-2xl border border-zinc-100 flex flex-col items-center justify-center gap-3 hover:border-black transition-all cursor-pointer group">

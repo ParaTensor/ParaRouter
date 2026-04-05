@@ -3,10 +3,12 @@ import {LogIn, UserPlus, MailCheck} from 'lucide-react';
 import {useNavigate} from 'react-router-dom';
 import {ApiError, apiPost} from '../lib/api';
 import {setAuthSession, type AuthSession} from '../lib/session';
+import { useTranslation } from "react-i18next";
 
 type Mode = 'login' | 'register';
 
 export default function Login() {
+    const { t } = useTranslation();
   const navigate = useNavigate();
   const [mode, setMode] = React.useState<Mode>('login');
   const [busy, setBusy] = React.useState(false);
@@ -124,13 +126,13 @@ export default function Login() {
         </div>
 
         <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Welcome to OpenHub</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">{t('login.welcome_to_openhub')}</h1>
           <p className="text-zinc-500">{mode === 'login' ? 'Sign in to continue.' : 'Create your account with email verification.'}</p>
         </div>
 
         <div className="grid grid-cols-2 rounded-xl bg-zinc-100 p-1 text-sm font-semibold">
-          <button className={`rounded-lg px-3 py-2 ${mode === 'login' ? 'bg-white shadow-sm' : 'text-zinc-500'}`} onClick={() => setMode('login')}>Login</button>
-          <button className={`rounded-lg px-3 py-2 ${mode === 'register' ? 'bg-white shadow-sm' : 'text-zinc-500'}`} onClick={() => setMode('register')}>Register</button>
+          <button className={`rounded-lg px-3 py-2 ${mode === 'login' ? 'bg-white shadow-sm' : 'text-zinc-500'}`} onClick={() => setMode('login')}>{t('login.login')}</button>
+          <button className={`rounded-lg px-3 py-2 ${mode === 'register' ? 'bg-white shadow-sm' : 'text-zinc-500'}`} onClick={() => setMode('register')}>{t('login.register')}</button>
         </div>
 
         {mode === 'login' ? (
@@ -141,14 +143,14 @@ export default function Login() {
               <LogIn size={18} />
               {busy ? 'Signing in...' : 'Sign in'}
             </button>
-            <p className="text-xs text-zinc-500 text-center">Default admin: <span className="font-mono">admin / admin123</span></p>
+            <p className="text-xs text-zinc-500 text-center">{t('login.default_admin')}<span className="font-mono">{t('login.admin_admin123')}</span></p>
           </div>
         ) : (
           <div className="space-y-3">
             <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="username" className="w-full px-4 py-3 border rounded-xl" />
             <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="email" className="w-full px-4 py-3 border rounded-xl" />
             <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="display name (optional)" className="w-full px-4 py-3 border rounded-xl" />
-            <input value={registerPassword} onChange={(e) => setRegisterPassword(e.target.value)} type="password" placeholder="password (>= 8 chars)" className="w-full px-4 py-3 border rounded-xl" />
+            <input value={registerPassword} onChange={(e) => setRegisterPassword(e.target.value)} type="password" placeholder={t('login.placeholder_password')} className="w-full px-4 py-3 border rounded-xl" />
             {!verificationSent ? (
               <button onClick={handleRequestCode} disabled={busy} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-black text-white rounded-xl font-bold disabled:opacity-60">
                 <MailCheck size={18} />
@@ -156,7 +158,7 @@ export default function Login() {
               </button>
             ) : (
               <>
-                <input value={verificationCode} onChange={(e) => setVerificationCode(e.target.value)} placeholder="6-digit code" className="w-full px-4 py-3 border rounded-xl" />
+                <input value={verificationCode} onChange={(e) => setVerificationCode(e.target.value)} placeholder={t('login.placeholder_verification_code')} className="w-full px-4 py-3 border rounded-xl" />
                 <button onClick={handleVerifyAndRegister} disabled={busy} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-black text-white rounded-xl font-bold disabled:opacity-60">
                   <UserPlus size={18} />
                   {busy ? 'Creating account...' : 'Verify and create account'}

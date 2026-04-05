@@ -2,6 +2,7 @@ import React from 'react';
 import { Search, Plus, SlidersHorizontal } from 'lucide-react';
 import { Select } from '../../components/Select';
 import { PriceRange, PricingPreview } from './types';
+import { useTranslation } from "react-i18next";
 
 interface PricingHeaderProps {
   search: string;
@@ -28,6 +29,7 @@ export default function PricingHeader({
   priceRange, setPriceRange, providers, openProviderDrawer, openCreateDrawer,
   draftOnly, draftCount, preview, busy, handlePreview, handlePublish
 }: PricingHeaderProps) {
+    const { t } = useTranslation();
   const hasProviders = providers.length > 0;
 
   return (
@@ -40,7 +42,7 @@ export default function PricingHeader({
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search model or provider..."
+              placeholder={t('pricingheader.search_placeholder')}
               className="w-full pl-10 pr-3 py-2.5 bg-white border border-zinc-200 rounded-lg text-sm focus:outline-none focus:border-black focus:ring-4 focus:ring-black/5 transition-all"
             />
           </div>
@@ -52,7 +54,7 @@ export default function PricingHeader({
             value={providerFilter}
             onChange={(val) => setProviderFilter(val)}
             options={[
-              { value: 'all', label: 'Provider: All' },
+              { value: 'all', label: t('pricingheader.provider_all') },
               ...providers.map(p => ({ value: p, label: p }))
             ]}
           />
@@ -62,9 +64,9 @@ export default function PricingHeader({
             value={statusFilter}
             onChange={(val) => setStatusFilter(val as 'all' | 'published' | 'draft')}
             options={[
-              { value: 'all', label: 'Status: All' },
-              { value: 'published', label: 'Published' },
-              { value: 'draft', label: 'Draft' }
+              { value: 'all', label: t('pricingheader.status_all') },
+              { value: 'published', label: t('pricingheader.status_published') },
+              { value: 'draft', label: t('pricingheader.status_draft') }
             ]}
           />
 
@@ -73,10 +75,10 @@ export default function PricingHeader({
             value={priceRange}
             onChange={(val) => setPriceRange(val as PriceRange)}
             options={[
-              { value: 'all', label: 'Price: All' },
-              { value: 'lt1', label: '< $1 / 1M' },
-              { value: '1to10', label: '$1 - $10 / 1M' },
-              { value: 'gte10', label: '> $10 / 1M' }
+              { value: 'all', label: t('pricingheader.price_all') },
+              { value: 'lt1', label: t('pricingheader.price_lt1') },
+              { value: '1to10', label: t('pricingheader.price_1to10') },
+              { value: 'gte10', label: t('pricingheader.price_gte10') }
             ]}
           />
         </div>
@@ -86,8 +88,7 @@ export default function PricingHeader({
             onClick={openProviderDrawer}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-zinc-200 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
           >
-            <Plus size={14} /> Provider
-          </button>
+            <Plus size={14} /> {t('pricingheader.provider')}</button>
           <button
             onClick={() => {
               if (!hasProviders) {
@@ -97,10 +98,9 @@ export default function PricingHeader({
               openCreateDrawer('quick');
             }}
             className={`inline-flex items-center gap-1.5 bg-black text-white rounded-lg px-3.5 py-2 text-sm font-semibold ${!hasProviders ? 'opacity-70' : ''}`}
-            title={!hasProviders ? 'Please create a Provider Account first' : 'Add a new price entry'}
+            title={!hasProviders ? t('pricingheader.tooltip_create_provider_first') : t('pricingheader.tooltip_add_new_price')}
           >
-            <Plus size={14} /> New Price
-          </button>
+            <Plus size={14} /> {t('pricingheader.new_price')}</button>
           <button
             onClick={() => {
               if (!hasProviders) {
@@ -110,30 +110,19 @@ export default function PricingHeader({
               openCreateDrawer('batch');
             }}
             className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-zinc-200 text-sm font-semibold hover:bg-zinc-50 ${!hasProviders ? 'opacity-70' : ''}`}
-            title={!hasProviders ? 'Please create a Provider Account first' : 'Configure batch markup rules'}
+            title={!hasProviders ? t('pricingheader.tooltip_create_provider_first') : t('pricingheader.tooltip_batch_rules')}
           >
-            <SlidersHorizontal size={14} /> Batch Rules
-          </button>
-          <button
-            onClick={() => setStatusFilter((v) => (v === 'draft' ? 'all' : 'draft'))}
-            className={`px-3.5 py-2 rounded-lg border text-sm font-semibold inline-flex items-center gap-1.5 ${draftOnly ? 'border-amber-300 text-amber-800 bg-amber-50' : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50'}`}
-          >
-            Drafts
-            <span className={`inline-flex min-w-5 justify-center rounded-full px-1.5 py-0.5 text-[11px] font-bold ${draftCount > 0 ? 'bg-amber-100 text-amber-700' : 'bg-zinc-100 text-zinc-500'}`}>
-              {draftCount}
-            </span>
-          </button>
+            <SlidersHorizontal size={14} /> {t('pricingheader.batch_rules')}</button>
         </div>
       </div>
 
-      {draftOnly && (
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-zinc-200 bg-zinc-50/60 px-4 py-3">
-          <p className="text-sm text-zinc-700">
-            {draftCount} draft items • affecting {preview?.affected_models ?? draftCount} models • estimated profit {preview?.estimated_profit_margin == null ? '-' : `${preview.estimated_profit_margin}%`}
+      {draftCount > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3">
+          <p className="text-sm font-medium text-amber-900">
+            {t('pricingheader.draft_items_pending_prefix', '还有 ')}{preview?.affected_models ?? draftCount} {t('pricingheader.draft_items_pending_suffix', ' 个模型操作还没发布')}
           </p>
           <div className="flex items-center gap-2">
-            <button onClick={handlePreview} className="px-3 py-1.5 rounded border text-sm font-semibold" disabled={busy}>Preview All</button>
-            <button onClick={handlePublish} className="px-3 py-1.5 rounded bg-black text-white text-sm font-semibold disabled:opacity-50" disabled={busy || draftCount === 0}>Publish All</button>
+            <button onClick={handlePublish} className="px-3 py-1.5 rounded-lg bg-black text-white text-sm font-semibold hover:bg-zinc-800 disabled:opacity-50 shadow-sm transition-colors" disabled={busy || draftCount === 0}>{t('pricingheader.publish_all', '一键发布')}</button>
           </div>
         </div>
       )}

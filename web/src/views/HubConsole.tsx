@@ -3,6 +3,7 @@ import {motion} from 'motion/react';
 import {Server, Activity, RefreshCw, Loader2} from 'lucide-react';
 import {apiGet, apiPost} from '../lib/api';
 import {localUser} from '../lib/session';
+import { useTranslation } from "react-i18next";
 
 interface Gateway {
   instance_id: string;
@@ -11,6 +12,7 @@ interface Gateway {
 }
 
 export default function HubConsoleView() {
+    const { t } = useTranslation();
   const [gateways, setGateways] = useState<Gateway[]>([]);
   const [loading, setLoading] = useState(true);
   const isAdmin = localUser.role === 'admin';
@@ -64,17 +66,16 @@ export default function HubConsoleView() {
   }, [isAdmin]);
 
   if (!isAdmin) {
-    return <div className="p-12 border-2 border-dashed rounded-xl text-center text-gray-500">Only administrators can access the Hub Console.</div>;
+    return <div className="p-12 border-2 border-dashed rounded-xl text-center text-gray-500">{t('hubconsole.only_administrators_can_access')}</div>;
   }
 
   return (
     <div className="space-y-8">
       <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold tracking-tight">Hub Console</h2>
+        <h2 className="text-3xl font-bold tracking-tight">{t('hubconsole.hub_console')}</h2>
         <div className="flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase tracking-widest">
           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          Live Monitoring
-        </div>
+          {t('hubconsole.live_monitoring')}</div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -84,17 +85,15 @@ export default function HubConsoleView() {
               <RefreshCw className={cn('w-6 h-6', simulating && 'animate-spin')} />
             </div>
             <div>
-              <h3 className="font-bold text-lg">Dev Simulator</h3>
-              <p className="text-xs text-zinc-500">Test data flow</p>
+              <h3 className="font-bold text-lg">{t('hubconsole.dev_simulator')}</h3>
+              <p className="text-xs text-zinc-500">{t('hubconsole.test_data_flow')}</p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3 pt-2">
             <button onClick={simulateRegistration} disabled={simulating} className="px-3 py-2 bg-white text-black text-xs font-bold rounded-lg hover:bg-zinc-200 disabled:opacity-50">
-              Mock Gateway
-            </button>
+              {t('hubconsole.mock_gateway')}</button>
             <button onClick={simulateUsage} disabled={simulating} className="px-3 py-2 bg-zinc-800 text-white text-xs font-bold rounded-lg hover:bg-zinc-700 disabled:opacity-50">
-              Mock Usage
-            </button>
+              {t('hubconsole.mock_usage')}</button>
           </div>
         </div>
 
@@ -103,7 +102,7 @@ export default function HubConsoleView() {
             <Loader2 className="w-8 h-8 animate-spin text-zinc-400" />
           </div>
         ) : gateways.length === 0 ? (
-          <div className="col-span-full p-12 border-2 border-dashed rounded-xl text-center text-gray-500">No gateways registered yet.</div>
+          <div className="col-span-full p-12 border-2 border-dashed rounded-xl text-center text-gray-500">{t('hubconsole.no_gateways_registered_yet')}</div>
         ) : (
           gateways.map((gw) => (
             <motion.div key={gw.instance_id} initial={{opacity: 0, scale: 0.95}} animate={{opacity: 1, scale: 1}} className="p-6 bg-white border rounded-xl shadow-sm space-y-4">
@@ -113,14 +112,14 @@ export default function HubConsoleView() {
                 </div>
                 <div>
                   <h3 className="font-bold text-lg">{gw.instance_id}</h3>
-                  <p className="text-xs text-gray-500 font-mono">ID: {gw.instance_id}</p>
+                  <p className="text-xs text-gray-500 font-mono">{t('hubconsole.id')}{gw.instance_id}</p>
                 </div>
               </div>
               <div className="flex items-center justify-between pt-4 border-t">
                 <span className={cn('text-sm font-bold flex items-center gap-2', gw.status === 'online' ? 'text-emerald-600' : 'text-zinc-400')}>
                   <Activity className="w-4 h-4" /> {gw.status.toUpperCase()}
                 </span>
-                <button className="text-sm font-bold hover:underline">Manage</button>
+                <button className="text-sm font-bold hover:underline">{t('hubconsole.manage')}</button>
               </div>
             </motion.div>
           ))

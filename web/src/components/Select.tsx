@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useTranslation } from "react-i18next";
 
 export function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
@@ -22,6 +23,7 @@ export type SelectProps = {
 };
 
 export function Select({ value, onChange, options, placeholder = "Select...", className, disabled }: SelectProps) {
+    const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -56,7 +58,7 @@ export function Select({ value, onChange, options, placeholder = "Select...", cl
       {open && (
         <div className="absolute z-50 mt-1 max-h-60 w-full min-w-[8rem] overflow-auto rounded-lg border border-zinc-200 bg-white p-1 shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2">
           {options.length === 0 ? (
-            <div className="py-6 text-center text-sm text-zinc-500">No options found.</div>
+            <div className="py-6 text-center text-sm text-zinc-500">{t('select.no_options_found')}</div>
           ) : (
             options.map((option) => (
               <button
