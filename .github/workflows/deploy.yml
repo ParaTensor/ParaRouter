@@ -40,11 +40,12 @@ jobs:
           echo "1. Preparing remote temporary directory and freeing space..."
           gcloud compute ssh mac-m4@$INSTANCE_NAME --zone=$ZONE --project=$PROJECT --quiet --command="
             sudo rm -rf $TMP_DIR
+            sudo apt-get clean
+            sudo journalctl --vacuum-time=12h || true
+            sudo rm -rf /root/.rustup /root/.cargo /home/mac-m4/.rustup /home/mac-m4/.cargo
+            sudo rm -rf /home/mac-m4/openhub/gateway/target  # VERY AGGRESSIVE: Clear Rust build cache to reclaim ~2GB+
             sudo mkdir -p $TMP_DIR
             sudo chown -R mac-m4:mac-m4 $TMP_DIR
-            sudo apt-get clean
-            sudo journalctl --vacuum-time=1d || true
-            sudo rm -rf /home/mac-m4/xrouter  # Delete old massive xrouter compilation cache!
           "
 
           echo "2. Uploading files to temporary directory..."
