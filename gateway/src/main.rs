@@ -64,7 +64,7 @@ async fn main() -> Result<()> {
     let app = api_router().with_state(runtime);
 
     let bind_addr = "0.0.0.0:8000";
-    info!("OpenGateway listening on http://{}", bind_addr);
+    info!("OpenHub Gateway listening on http://{}", bind_addr);
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
     axum::serve(listener, app).await?;
 

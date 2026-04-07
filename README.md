@@ -1,9 +1,9 @@
-# OpenGateway Unified Workspace
+# OpenHub Unified Workspace
 
 ## Structure
-- `gateway/`: OpenGateway (Data Plane, Rust)
-- `hub/`: OpenGateway-Hub (Control Plane, Node.js BFF)
-- `web/`: OpenGateway Console (Frontend UI, React/Vite)
+- `gateway/`: OpenHub Gateway (Data Plane, Rust)
+- `hub/`: OpenHub Hub (Control Plane, Node.js BFF)
+- `web/`: OpenHub Console (Frontend UI, React/Vite)
 - `packages/`: Shared libraries and types across workspaces
 
 ## Quick Start

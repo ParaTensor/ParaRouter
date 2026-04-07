@@ -76,7 +76,7 @@
     "placeholder_search": "Search chats...",
     "yesterday": "Yesterday",
     "assistant_greeting": "Hello! I'm the OpenHub assistant. How can I help you with your AI models today?",
-    "mock_response": "This is a mock response from OpenHub using {{model}}. In a real integration, this would be routed through OpenGateway to your selected model.",
+    "mock_response": "This is a mock response from OpenHub using {{model}}. In a real integration, this would be routed through OpenHub Gateway to your selected model.",
     "new_chat_started": "New chat started. How can I help?",
     "placeholder_message": "Message {{model}}...",
     "just_now": "Just now"

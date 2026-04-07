@@ -76,7 +76,7 @@
     "placeholder_search": "搜索对话...",
     "yesterday": "昨天",
     "assistant_greeting": "你好！我是 OpenHub 助手。今天有什么可以帮您的吗？",
-    "mock_response": "这是来自 OpenHub 使用 {{model}} 的模拟回复。在实际集成中，这将通过 OpenGateway 路由到您选择的模型。",
+    "mock_response": "这是来自 OpenHub 使用 {{model}} 的模拟回复。在实际集成中，这将通过 OpenHub Gateway 路由到您选择的模型。",
     "new_chat_started": "新对话已开始。有什么可以帮您的吗？",
     "placeholder_message": "发送消息给 {{model}}...",
     "just_now": "刚刚"
