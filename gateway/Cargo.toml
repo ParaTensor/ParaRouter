@@ -1,6 +1,6 @@
 [package]
 name = "opengateway"
-version = "0.0.7"
+version = "1.0.0"
 edition = "2021"
 authors = ["lipicoder@qq.com"]
 description = "A high-performance LLM gateway with a CLI-only control plane and OpenAI-compatible data plane. Features unified provider routing, priority-based load balancing, and production-ready rate limiting."
