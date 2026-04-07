@@ -44,6 +44,7 @@ jobs:
             sudo chown -R mac-m4:mac-m4 $TMP_DIR
             sudo apt-get clean
             sudo journalctl --vacuum-time=1d || true
+            sudo rm -rf /home/mac-m4/xrouter  # Delete old massive xrouter compilation cache!
           "
 
           echo "2. Uploading files to temporary directory..."

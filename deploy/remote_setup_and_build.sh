@@ -32,13 +32,16 @@ if ! free | grep -i swap > /dev/null; then
 fi
 
 # 3. Install Rustup if missing
+# First, try to source the env to see if it's already installed
+[ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
+
 if ! command -v rustc &> /dev/null; then
     echo "Installing Rustup..."
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    source $HOME/.cargo/env
+    source "$HOME/.cargo/env"
 else
-    source $HOME/.cargo/env
     rustup update stable
+    rustup toolchain list | grep -v stable | xargs -I {} rustup toolchain uninstall {} || true
 fi
 
 # 4. Install Node.js if missing (using NodeSource)
