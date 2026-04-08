@@ -68,6 +68,14 @@ echo "Building Gateway (this may take a few minutes)..."
 cd $PROJECT_DIR/gateway
 cargo build --release
 
+# 7.1 Reclaim disk space! (CRITICAL for 10GB GCP VMs)
+echo "Extracting binary and sweeping rust compilation caches..."
+mkdir -p $PROJECT_DIR/gateway/bin
+cp target/release/gateway $PROJECT_DIR/gateway/bin/gateway
+rm -rf target/
+rm -rf ~/.cargo/registry/
+rm -rf /root/.cargo/registry/
+
 # 8. Restart Services
 echo "Configuring and Restarting Systemd Services..."
 sudo cp $PROJECT_DIR/deploy/openhub-hub.service /etc/systemd/system/openhub-hub.service
