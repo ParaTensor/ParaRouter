@@ -1,6 +1,6 @@
 [package]
 name = "gateway"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 authors = ["lipicoder@qq.com"]
 description = "A high-performance LLM gateway with a CLI-only control plane and OpenAI-compatible data plane. Features unified provider routing, priority-based load balancing, and production-ready rate limiting."
