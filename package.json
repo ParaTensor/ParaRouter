@@ -13,7 +13,8 @@
     "build": "npm run build -w @openhub/web",
     "preview": "npm run preview -w @openhub/web",
     "clean": "rm -rf dist",
-    "lint": "npm run lint --workspaces"
+    "lint": "npm run lint --workspaces",
+    "test:e2e": "npx tsx e2e/e2e.test.ts"
   },
   "devDependencies": {
     "typescript": "~5.8.2"

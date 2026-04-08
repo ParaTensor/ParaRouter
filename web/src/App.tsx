@@ -75,7 +75,7 @@ export default function App() {
                 <div className="w-8 h-8 bg-black rounded flex items-center justify-center">
                   <div className="w-4 h-4 bg-white rounded-sm rotate-45" />
                 </div>
-                <span className="font-bold tracking-tight text-xl">OpenHub</span>
+                <span className="font-bold tracking-tight text-xl">ParaRouter</span>
               </div>
               <p className="text-sm text-gray-500 leading-relaxed">
                 The unified interface for LLMs. Access any model via a single API.
@@ -113,7 +113,7 @@ export default function App() {
           </div>
 
           <div className="pt-8 border-t flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-sm text-gray-400">© 2024 OpenHub. All rights reserved.</p>
+            <p className="text-sm text-gray-400">© 2024 ParaRouter. All rights reserved.</p>
             <div className="flex gap-6">
               <a href="#" className="text-gray-400 hover:text-black transition-colors">Twitter</a>
               <a href="#" className="text-gray-400 hover:text-black transition-colors">GitHub</a>

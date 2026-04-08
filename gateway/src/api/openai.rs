@@ -4,7 +4,6 @@ use axum::{
     Json,
 };
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use unigateway_core::ExecutionTarget;
 
 use unigateway_runtime::core::{try_openai_chat_via_core, try_openai_embeddings_via_core};

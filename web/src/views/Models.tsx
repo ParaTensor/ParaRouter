@@ -3,6 +3,7 @@ import {Search, ArrowUpRight, Zap, SlidersHorizontal} from 'lucide-react';
 import {apiGet, apiPost} from '../lib/api';
 import {localUser} from '../lib/session';
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 
 export default function ModelsView() {
   const { t } = useTranslation();
@@ -130,9 +131,9 @@ export default function ModelsView() {
                   <Zap size={10} className="text-emerald-500" />
                   {model.latency}
                 </div>
-                <button className="flex items-center gap-1 text-xs font-bold text-zinc-900 opacity-0 group-hover:opacity-100 transition-all">
+                <Link to={`/models/${encodeURIComponent(model.id)}/providers`} className="flex items-center gap-1 text-xs font-bold text-zinc-900 opacity-0 group-hover:opacity-100 transition-all">
                   {t('models.details')}<ArrowUpRight size={14} />
-                </button>
+                </Link>
               </div>
             </div>
           ))

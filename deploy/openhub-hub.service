@@ -9,8 +9,7 @@ WorkingDirectory=/home/mac-m4/openhub
 ExecStart=/usr/bin/npm run dev -w @openhub/hub
 Restart=always
 RestartSec=3
-Environment=NODE_ENV=production
-Environment=DATABASE_URL=postgres://xinference:password@localhost:5432/openhub
+EnvironmentFile=/home/mac-m4/.openhub.env
 Environment=PORT=3000
 
 [Install]

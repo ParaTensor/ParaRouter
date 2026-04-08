@@ -30,8 +30,8 @@ export async function initSchema() {
     [
       'local-admin',
       'admin',
-      'admin@openhub.local',
-      'OpenHub Admin',
+      'admin@pararouter.com',
+      'ParaRouter Admin',
       hashPassword('admin123'),
       Date.now(),
       Date.now(),

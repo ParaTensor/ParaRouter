@@ -17,10 +17,10 @@ export default function DocsView() {
     {
       title: 'Quick Start',
       icon: Zap,
-      content: 'Get up and running with OpenHub in minutes. Our unified API allows you to access multiple LLMs with a single integration.',
-      code: `curl https://api.openhub.ai/v1/chat/completions \\
+      content: 'Get up and running with ParaRouter in minutes. Our unified API allows you to access multiple LLMs with a single integration.',
+      code: `curl https://api.pararouter.com/v1/chat/completions \\
   -H "Content-Type: application/json" \\
-  -H "Authorization: Bearer $OPENHUB_API_KEY" \\
+  -H "Authorization: Bearer $PARAROUTER_API_KEY" \\
   -d '{
     "model": "anthropic/claude-3.5-sonnet",
     "messages": [{"role": "user", "content": "Hello!"}]
@@ -29,14 +29,14 @@ export default function DocsView() {
     {
       title: 'Authentication',
       icon: Shield,
-      content: 'OpenHub uses API keys to authenticate requests. You can manage your keys in the Keys dashboard.',
+      content: 'ParaRouter uses API keys to authenticate requests. You can manage your keys in the Keys dashboard.',
       code: 'Authorization: Bearer <YOUR_API_KEY>'
     },
     {
       title: 'Model Routing',
       icon: Globe,
       content: 'Route requests to specific models or use our intelligent routing to find the best provider based on latency, cost, or performance.',
-      code: '"model": "openhub/auto" // Automatically routes to the best model'
+      code: '"model": "pararouter/auto" // Automatically routes to the best model'
     }
   ];
 

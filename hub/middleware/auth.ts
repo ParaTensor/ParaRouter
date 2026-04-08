@@ -15,7 +15,7 @@ export async function authenticate(req: AuthenticatedRequest, res: Response, nex
   }
   const now = Date.now();
   const sessionResult = await pool.query(
-    `SELECT s.token, u.id, u.username, u.email, u.display_name, u.role, u.status
+    `SELECT s.token, u.id, u.username, u.email, u.display_name, u.role, u.status, u.balance
      FROM auth_sessions s
      JOIN users u ON u.id = s.user_id
      WHERE s.token = $1 AND s.revoked_at IS NULL AND s.expires_at > $2

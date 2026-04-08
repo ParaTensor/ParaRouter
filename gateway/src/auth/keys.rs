@@ -16,6 +16,7 @@ pub struct AuthenticatedUser {
     pub key_id: String,
     pub uid: String,
     pub name: String,
+    pub balance: f64,
 }
 
 #[axum::async_trait]
@@ -45,7 +46,13 @@ impl FromRequestParts<Arc<OpenHubRuntime>> for AuthenticatedUser {
         })?;
 
         match user {
-            Some(u) => Ok(u),
+            Some(u) => {
+                if u.balance <= 0.0 {
+                    Err(payment_required_response("Insufficient balance. Please recharge your account."))
+                } else {
+                    Ok(u)
+                }
+            },
             None => Err(unauthorized_response("Invalid API key")),
         }
     }
@@ -60,6 +67,7 @@ async fn lookup_user_api_key(
         id: String,
         uid: String,
         name: String,
+        balance: f64,
     }
 
     let pool = &state.db;
@@ -67,9 +75,10 @@ async fn lookup_user_api_key(
     // In OpenHub schema, `user_api_keys` holds the gateway keys
     let row = sqlx::query_as::<_, UserKeyRow>(
         r#"
-        SELECT id, uid, name
-        FROM user_api_keys
-        WHERE key = $1
+        SELECT k.id, k.uid, k.name, u.balance
+        FROM user_api_keys k
+        JOIN users u ON k.uid = u.id
+        WHERE k.key = $1
         "#,
     )
     .bind(token)
@@ -80,6 +89,7 @@ async fn lookup_user_api_key(
         key_id: r.id,
         uid: r.uid,
         name: r.name,
+        balance: r.balance,
     }))
 }
 
@@ -107,6 +117,21 @@ fn internal_error_response(msg: &str) -> Response {
                 "type": "api_error",
                 "param": null,
                 "code": "internal_error"
+            }
+        })),
+    )
+        .into_response()
+}
+
+fn payment_required_response(msg: &str) -> Response {
+    (
+        StatusCode::PAYMENT_REQUIRED,
+        Json(json!({
+            "error": {
+                "message": msg,
+                "type": "api_error",
+                "param": null,
+                "code": "insufficient_quota"
             }
         })),
     )

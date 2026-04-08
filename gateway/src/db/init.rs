@@ -10,13 +10,7 @@ pub async fn try_database_with_url(url: Option<&str>) -> Result<DatabasePool> {
         .max_connections(10)
         .connect(url)
         .await?;
-    ensure_schema_postgres(&pool).await?;
+    // ensure_schema_postgres(&pool).await?;
     Ok(DatabasePool::Postgres(pool))
 }
 
-async fn ensure_schema_postgres(pool: &sqlx::Pool<sqlx::Postgres>) -> Result<()> {
-    use sqlx::Executor;
-    let schema = include_str!("../../../packages/shared/schema.sql");
-    pool.execute(schema).await?;
-    Ok(())
-}

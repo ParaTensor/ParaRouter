@@ -1,5 +1,5 @@
 import React from 'react';
-import {LogIn, UserPlus, MailCheck} from 'lucide-react';
+import {LogIn, UserPlus, MailCheck, Globe} from 'lucide-react';
 import {useNavigate} from 'react-router-dom';
 import {ApiError, apiPost} from '../lib/api';
 import {setAuthSession, type AuthSession} from '../lib/session';
@@ -8,15 +8,15 @@ import { useTranslation } from "react-i18next";
 type Mode = 'login' | 'register';
 
 export default function Login() {
-    const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [mode, setMode] = React.useState<Mode>('login');
   const [busy, setBusy] = React.useState(false);
   const [message, setMessage] = React.useState<string>('');
   const [error, setError] = React.useState<string>('');
 
-  const [account, setAccount] = React.useState('admin');
-  const [password, setPassword] = React.useState('admin123');
+  const [account, setAccount] = React.useState('');
+  const [password, setPassword] = React.useState('');
 
   const [username, setUsername] = React.useState('');
   const [email, setEmail] = React.useState('');
@@ -31,7 +31,7 @@ export default function Login() {
       setError(bodyMessage || err.message);
       return;
     }
-    setError(err instanceof Error ? err.message : 'request failed');
+    setError(err instanceof Error ? err.message : t('login.request_failed'));
   };
 
   const handleLogin = async () => {
@@ -89,7 +89,7 @@ export default function Login() {
         password: registerPassword,
       });
       setVerificationSent(true);
-      setMessage('Verification code sent. Please check your email.');
+      setMessage(t('login.verification_sent_message'));
     } catch (err) {
       handleError(err);
     } finally {
@@ -103,12 +103,21 @@ export default function Login() {
     setError('');
     setMessage('');
     try {
-      const session = await apiPost<AuthSession>('/api/auth/register/verify', {
+      await apiPost<AuthSession>('/api/auth/register/verify', {
         email: email.trim(),
         code: verificationCode.trim(),
       });
-      setAuthSession(session);
-      navigate('/models');
+      setMessage(t('login.registration_success_redirecting'));
+      setTimeout(() => {
+        setMode('login');
+        setVerificationSent(false);
+        setMessage('');
+        setUsername('');
+        setEmail('');
+        setDisplayName('');
+        setRegisterPassword('');
+        setVerificationCode('');
+      }, 3000);
     } catch (err) {
       handleError(err);
     } finally {
@@ -117,7 +126,17 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#fafafa] p-4">
+    <div className="min-h-screen flex items-center justify-center bg-[#fafafa] p-4 relative">
+      <div className="absolute top-6 right-6">
+        <button
+          onClick={() => i18n.changeLanguage(i18n.language === 'en' ? 'zh' : 'en')}
+          className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-zinc-600 bg-white border border-gray-200 rounded-full shadow-sm hover:text-zinc-900 hover:bg-gray-50 transition-colors"
+        >
+          <Globe size={16} />
+          {i18n.language === 'en' ? '中文' : 'English'}
+        </button>
+      </div>
+
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-gray-100 p-8 space-y-6">
         <div className="flex justify-center">
           <div className="w-16 h-16 bg-black rounded-2xl flex items-center justify-center shadow-lg">
@@ -127,7 +146,7 @@ export default function Login() {
 
         <div className="text-center space-y-2">
           <h1 className="text-3xl font-bold tracking-tight text-zinc-900">{t('login.welcome_to_openhub')}</h1>
-          <p className="text-zinc-500">{mode === 'login' ? 'Sign in to continue.' : 'Create your account with email verification.'}</p>
+          <p className="text-zinc-500">{mode === 'login' ? t('login.sign_in_to_continue') : t('login.create_your_account_with_email_verification')}</p>
         </div>
 
         <div className="grid grid-cols-2 rounded-xl bg-zinc-100 p-1 text-sm font-semibold">
@@ -137,39 +156,40 @@ export default function Login() {
 
         {mode === 'login' ? (
           <div className="space-y-3">
-            <input value={account} onChange={(e) => setAccount(e.target.value)} placeholder="username or email" className="w-full px-4 py-3 border rounded-xl" />
-            <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="password" className="w-full px-4 py-3 border rounded-xl" />
+            <input value={account} onChange={(e) => setAccount(e.target.value)} placeholder={t('login.placeholder_username_or_email')} className="w-full px-4 py-3 border rounded-xl" />
+            <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder={t('login.placeholder_login_password')} className="w-full px-4 py-3 border rounded-xl" />
             <button onClick={handleLogin} disabled={busy} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-black text-white rounded-xl font-bold disabled:opacity-60">
               <LogIn size={18} />
-              {busy ? 'Signing in...' : 'Sign in'}
+              {busy ? t('login.signing_in') : t('login.sign_in')}
             </button>
-            <p className="text-xs text-zinc-500 text-center">{t('login.default_admin')}<span className="font-mono">{t('login.admin_admin123')}</span></p>
           </div>
         ) : (
           <div className="space-y-3">
-            <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="username" className="w-full px-4 py-3 border rounded-xl" />
-            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="email" className="w-full px-4 py-3 border rounded-xl" />
-            <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="display name (optional)" className="w-full px-4 py-3 border rounded-xl" />
+            <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder={t('login.placeholder_username')} className="w-full px-4 py-3 border rounded-xl" />
+            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder={t('login.placeholder_email')} className="w-full px-4 py-3 border rounded-xl" />
+            <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder={t('login.placeholder_display_name')} className="w-full px-4 py-3 border rounded-xl" />
             <input value={registerPassword} onChange={(e) => setRegisterPassword(e.target.value)} type="password" placeholder={t('login.placeholder_password')} className="w-full px-4 py-3 border rounded-xl" />
             {!verificationSent ? (
               <button onClick={handleRequestCode} disabled={busy} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-black text-white rounded-xl font-bold disabled:opacity-60">
                 <MailCheck size={18} />
-                {busy ? 'Sending code...' : 'Send verification code'}
+                {busy ? t('login.sending_code') : t('login.send_verification_code')}
               </button>
             ) : (
               <>
                 <input value={verificationCode} onChange={(e) => setVerificationCode(e.target.value)} placeholder={t('login.placeholder_verification_code')} className="w-full px-4 py-3 border rounded-xl" />
                 <button onClick={handleVerifyAndRegister} disabled={busy} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-black text-white rounded-xl font-bold disabled:opacity-60">
                   <UserPlus size={18} />
-                  {busy ? 'Creating account...' : 'Verify and create account'}
+                  {busy ? t('login.creating_account') : t('login.verify_and_create_account')}
                 </button>
               </>
             )}
           </div>
         )}
 
-        {message && <p className="text-sm text-emerald-600 text-center">{message}</p>}
-        {error && <p className="text-sm text-red-600 text-center">{error}</p>}
+        <div className="min-h-[24px] flex flex-col justify-center">
+          {message && <p className="text-sm text-emerald-600 text-center transition-all">{message}</p>}
+          {error && <p className="text-sm text-red-600 text-center transition-all">{error}</p>}
+        </div>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ export type LocalUser = {
   email: string;
   displayName: string;
   role: LocalUserRole;
+  balance?: number;
 };
 
 export type AuthSession = {
@@ -22,6 +23,7 @@ function guestUser(): LocalUser {
     email: '',
     displayName: 'Guest',
     role: 'user',
+    balance: 0,
   };
 }
 
@@ -46,6 +48,7 @@ export function getAuthSession(): AuthSession | null {
         email: String(user.email),
         displayName: String(user.displayName || user.email),
         role: user.role === 'admin' ? 'admin' : 'user',
+        balance: typeof user.balance === 'number' ? user.balance : undefined,
       },
     };
   } catch {

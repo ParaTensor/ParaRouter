@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "OpenHub"
+    "title": "ParaRouter"
   },
   "sidebar": {
     "models": "Models",
@@ -17,7 +17,7 @@
   },
   "settings": {
     "title": "Settings",
-    "description": "Manage your OpenHub account and platform preferences.",
+    "description": "Manage your ParaRouter account and platform preferences.",
     "saveChanges": "Save Changes",
     "tabs": {
       "profile": "Profile",
@@ -48,7 +48,7 @@
     "8": "+8%",
     "12": "+12%",
     "activity": "Activity",
-    "monitor_your_usage_and_spendin": "Monitor your usage and spending across all models on OpenHub.",
+    "monitor_your_usage_and_spendin": "Monitor your usage and spending across all models on ParaRouter.",
     "last_7_days": "Last 7 days",
     "export": "Export",
     "total_tokens": "Total Tokens",
@@ -70,20 +70,20 @@
   },
   "chat": {
     "new_chat": "New Chat",
-    "openhub_assistant": "OpenHub Assistant",
+    "openhub_assistant": "ParaRouter Assistant",
     "system_online": "System Online",
-    "openhub_uses_multiple_models_r": "OpenHub uses multiple models, results may vary in accuracy.",
+    "openhub_uses_multiple_models_r": "ParaRouter uses multiple models, results may vary in accuracy.",
     "placeholder_search": "Search chats...",
     "yesterday": "Yesterday",
-    "assistant_greeting": "Hello! I'm the OpenHub assistant. How can I help you with your AI models today?",
-    "mock_response": "This is a mock response from OpenHub using {{model}}. In a real integration, this would be routed through OpenHub Gateway to your selected model.",
+    "assistant_greeting": "Hello! I'm the ParaRouter assistant. How can I help you with your AI models today?",
+    "mock_response": "This is a mock response from ParaRouter using {{model}}. In a real integration, this would be routed through ParaRouter Gateway to your selected model.",
     "new_chat_started": "New chat started. How can I help?",
     "placeholder_message": "Message {{model}}...",
     "just_now": "Just now"
   },
   "docs": {
     "documentation": "Documentation",
-    "build_with_openhub": "Build with OpenHub",
+    "build_with_openhub": "Build with ParaRouter",
     "the_unified_control_plane_for_": "The unified control plane for high-performance LLM management.\nOne integration, infinite possibilities.",
     "ready_to_scale": "Ready to scale?",
     "join_thousands_of_developers_b": "Join thousands of developers building the future of AI.\nOur infrastructure is built for production-grade throughput and low latency.",
@@ -137,9 +137,9 @@
   },
   "keys": {
     "api_keys": "API Keys",
-    "manage_your_api_keys_to_authen": "Manage your API keys to authenticate with OpenHub.",
+    "manage_your_api_keys_to_authen": "Manage your API keys to authenticate with ParaRouter.",
     "create_key": "Create Key",
-    "your_api_keys_are_sensitive_in": "Your API keys are sensitive information. Never share them or commit them to version control.\n          OpenHub will only show the full key once upon creation.",
+    "your_api_keys_are_sensitive_in": "Your API keys are sensitive information. Never share them or commit them to version control.\n          ParaRouter will only show the full key once upon creation.",
     "name": "Name",
     "key": "Key",
     "usage": "Usage",
@@ -152,13 +152,29 @@
     "cancel": "Cancel"
   },
   "login": {
-    "welcome_to_openhub": "Welcome to OpenHub",
+    "welcome_to_openhub": "Welcome to ParaRouter",
     "login": "Login",
     "register": "Register",
     "default_admin": "Default admin:",
     "admin_admin123": "admin / admin123",
     "placeholder_password": "password (>= 8 chars)",
-    "placeholder_verification_code": "6-digit code"
+    "placeholder_verification_code": "6-digit code",
+    "sign_in_to_continue": "Sign in to continue.",
+    "create_your_account_with_email_verification": "Create your account with email verification.",
+    "placeholder_username_or_email": "username or email",
+    "placeholder_login_password": "password",
+    "signing_in": "Signing in...",
+    "sign_in": "Sign in",
+    "placeholder_username": "username",
+    "placeholder_email": "email",
+    "placeholder_display_name": "display name (optional)",
+    "sending_code": "Sending code...",
+    "send_verification_code": "Send verification code",
+    "creating_account": "Creating account...",
+    "verify_and_create_account": "Verify and create account",
+    "verification_sent_message": "Verification code sent. Please check your email.",
+    "request_failed": "request failed",
+    "registration_success_redirecting": "Registration successful! Redirecting to login in 3 seconds..."
   },
   "modelproviders": {
     "model_providers": "Model Providers",
@@ -403,7 +419,7 @@
     "placeholder_key": "sk-..."
   },
   "navbar": {
-    "openhub": "OpenHub",
+    "openhub": "ParaRouter",
     "0_00": "$0.00",
     "account": "Account",
     "api_keys": "API Keys",

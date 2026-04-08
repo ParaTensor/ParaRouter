@@ -41,6 +41,7 @@ export type AuthUser = {
   display_name: string;
   role: 'admin' | 'user';
   status: string;
+  balance?: number;
 };
 
 export type AuthSessionResponse = {
@@ -51,5 +52,6 @@ export type AuthSessionResponse = {
     email: string;
     displayName: string;
     role: 'admin' | 'user';
+    balance?: number;
   };
 };

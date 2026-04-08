@@ -31,12 +31,43 @@ impl GatewayHooks for OpenHubHooks {
                 
             let user_id = report.metadata.get("user_id").cloned().unwrap_or_default();
             let model = report.metadata.get("requested_model").cloned().unwrap_or_else(|| "unknown".to_string());
+            let prompt_tokens = report.usage.as_ref().and_then(|u| u.input_tokens).unwrap_or(0) as i32;
+            let completion_tokens = report.usage.as_ref().and_then(|u| u.output_tokens).unwrap_or(0) as i32;
             let tokens = report.usage.as_ref().and_then(|u| u.total_tokens).unwrap_or(0) as i32;
             let latency = report.latency_ms as i32;
             let status = 200; // unigateway_core RequestReport only emits for success paths right now, or errors surface differently
             
-            // For now cost is '0', real billing can calculate cost asynchronous from prices
-            let cost = "0.0";
+            let mut cost = "0.0".to_string();
+            
+            if !user_id.is_empty() {
+                let cost_query = sqlx::query(
+                    r#"
+                    WITH billing AS (
+                        SELECT 
+                            COALESCE((global_pricing->>'prompt')::numeric, 0) as p_price,
+                            COALESCE((global_pricing->>'completion')::numeric, 0) as c_price
+                        FROM llm_models WHERE id = $1
+                    )
+                    UPDATE users
+                    SET balance = balance - ((billing.p_price * $2 + billing.c_price * $3) / 1000000.0)
+                    FROM billing
+                    WHERE users.id = $4
+                    RETURNING ((billing.p_price * $2 + billing.c_price * $3) / 1000000.0)::float8 as cost_deducted
+                    "#,
+                )
+                .bind(&model)
+                .bind(prompt_tokens)
+                .bind(completion_tokens)
+                .bind(&user_id)
+                .fetch_optional(&db)
+                .await;
+
+                if let Ok(Some(row)) = cost_query {
+                    use sqlx::Row;
+                    let c: f64 = row.try_get("cost_deducted").unwrap_or(0.0);
+                    cost = c.to_string();
+                }
+            }
             
             // Insert into activity table
             let result = sqlx::query(

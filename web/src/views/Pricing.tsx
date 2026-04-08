@@ -261,7 +261,7 @@ export default function PricingView() {
   const handlePublish = async () => {
     setBusy(true);
     try {
-      await apiPost('/api/pricing/publish', {operator: 'admin@openhub.local'});
+      await apiPost('/api/pricing/publish', {operator: 'admin@pararouter.com'});
       await loadAll(false);
       await handlePreview();
       showNotification(t('pricing.publish_success', '发布成功'));

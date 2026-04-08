@@ -113,7 +113,7 @@ export default function SettingsView() {
               <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm p-8 flex flex-col md:flex-row items-center justify-between gap-8">
                 <div className="space-y-2 text-center md:text-left">
                   <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">{t('settings.current_balance')}</p>
-                  <h4 className="text-5xl font-black tracking-tighter">{t('settings.12_45')}</h4>
+                  <h4 className="text-5xl font-black tracking-tighter">${(localUser.balance || 0).toFixed(4)}</h4>
                   <p className="text-xs text-emerald-600 font-bold flex items-center gap-1 justify-center md:justify-start">
                     <TrendingUp size={12} />
                     {t('settings.estimated_45_days_remaining')}</p>

@@ -24,7 +24,7 @@ router.post('/login', async (req, res) => {
   }
   const account = accountRaw.toLowerCase();
   const result = await pool.query(
-    `SELECT id, username, email, display_name, role, status, password_hash
+    `SELECT id, username, email, display_name, role, status, balance, password_hash
      FROM users
      WHERE username = $1 OR email = $2
      LIMIT 1`,
@@ -50,6 +50,7 @@ router.post('/login', async (req, res) => {
       display_name: user.display_name,
       role: user.role === 'admin' ? 'admin' : 'user',
       status: user.status,
+      balance: user.balance,
     }),
   );
 });
@@ -133,11 +134,13 @@ router.post('/register/verify', async (req, res) => {
     return res.status(409).json({ error: 'username or email already exists' });
   }
   const userId = randomUUID();
-  await pool.query(
+  const userInsertResult = await pool.query(
     `INSERT INTO users (id, username, email, display_name, password_hash, role, status, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, 'user', 'active', $6, $7)`,
+     VALUES ($1, $2, $3, $4, $5, 'user', 'active', $6, $7)
+     RETURNING balance`,
     [userId, verification.username, email, verification.display_name, verification.password_hash, now, now],
   );
+  const insertedBalance = userInsertResult.rows[0]?.balance || 10.0;
   await pool.query('UPDATE email_verifications SET used_at = $2 WHERE id = $1', [verification.id, now]);
   const token = randomBytes(24).toString('hex');
   await pool.query(
@@ -153,6 +156,7 @@ router.post('/register/verify', async (req, res) => {
       display_name: verification.display_name,
       role: 'user',
       status: 'active',
+      balance: insertedBalance,
     }),
   );
 });
@@ -173,6 +177,7 @@ router.get('/me', async (req: AuthenticatedRequest, res) => {
     email: user.email,
     displayName: user.display_name,
     role: user.role,
+    balance: user.balance,
   });
 });
 
@@ -204,6 +209,33 @@ router.post('/change-password', async (req: AuthenticatedRequest, res) => {
     token,
   ]);
   res.json({ status: 'password_updated' });
+});
+router.post('/set-admin', async (req: AuthenticatedRequest, res) => {
+  const user = req.authUser;
+  if (!user) return res.status(401).json({ error: 'unauthorized' });
+  
+  if (user.role !== 'admin') {
+    return res.status(403).json({ 
+      error: '无权限操作，仅管理员可修改角色', 
+      code: 'org_admin_required' 
+    });
+  }
+
+  const targetUsername = String(req.body?.username || '').trim();
+  if (!targetUsername) {
+    return res.status(400).json({ error: 'username required' });
+  }
+
+  const result = await pool.query(
+    'UPDATE users SET role = $1, updated_at = $2 WHERE username = $3 RETURNING id',
+    ['admin', Date.now(), targetUsername]
+  );
+
+  if (result.rowCount === 0) {
+    return res.status(404).json({ error: 'user not found' });
+  }
+
+  res.json({ status: 'admin_role_granted' });
 });
 
 export default router;

@@ -55,6 +55,7 @@ export function toAuthSessionResponse(token: string, user: AuthUser): AuthSessio
       email: user.email,
       displayName: user.display_name || user.username,
       role: user.role,
+      balance: user.balance,
     },
   };
 }
@@ -64,7 +65,7 @@ export async function sendRegisterVerificationEmail(email: string, code: string)
   if (!apiKey) {
     throw new Error('RESEND_API_KEY is not configured');
   }
-  const from = process.env.RESEND_FROM_EMAIL || 'OpenHub <onboarding@resend.dev>';
+  const from = process.env.RESEND_FROM_EMAIL || 'ParaRouter <onboarding@pararouter.com>';
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -74,8 +75,8 @@ export async function sendRegisterVerificationEmail(email: string, code: string)
     body: JSON.stringify({
       from,
       to: [email],
-      subject: 'OpenHub registration verification code',
-      html: `<p>Your OpenHub verification code is:</p><h2>${code}</h2><p>This code will expire in 10 minutes.</p>`,
+      subject: 'ParaRouter registration verification code',
+      html: `<p>Your ParaRouter verification code is:</p><h2>${code}</h2><p>This code will expire in 10 minutes.</p>`,
     }),
   });
   if (!response.ok) {

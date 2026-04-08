@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "OpenHub"
+    "title": "ParaRouter"
   },
   "sidebar": {
     "models": "模型",
@@ -17,7 +17,7 @@
   },
   "settings": {
     "title": "设置",
-    "description": "管理您的 OpenHub 账户及平台偏好。",
+    "description": "管理您的 ParaRouter 账户及平台偏好。",
     "saveChanges": "保存更改",
     "tabs": {
       "profile": "个人资料",
@@ -48,7 +48,7 @@
     "8": "+8%",
     "12": "+12%",
     "activity": "趋势",
-    "monitor_your_usage_and_spendin": "监控您在 OpenHub 上各个模型的使用情况和花费。",
+    "monitor_your_usage_and_spendin": "监控您在 ParaRouter 上各个模型的使用情况和花费。",
     "last_7_days": "过去 7 天",
     "export": "导出",
     "total_tokens": "总 Tokens",
@@ -70,20 +70,20 @@
   },
   "chat": {
     "new_chat": "新对话",
-    "openhub_assistant": "OpenHub 助手",
+    "openhub_assistant": "ParaRouter 助手",
     "system_online": "系统在线",
-    "openhub_uses_multiple_models_r": "OpenHub 调用多方模型，回复内容的准确性可能会有所不同。",
+    "openhub_uses_multiple_models_r": "ParaRouter 调用多方模型，回复内容的准确性可能会有所不同。",
     "placeholder_search": "搜索对话...",
     "yesterday": "昨天",
-    "assistant_greeting": "你好！我是 OpenHub 助手。今天有什么可以帮您的吗？",
-    "mock_response": "这是来自 OpenHub 使用 {{model}} 的模拟回复。在实际集成中，这将通过 OpenHub Gateway 路由到您选择的模型。",
+    "assistant_greeting": "你好！我是 ParaRouter 助手。今天有什么可以帮您的吗？",
+    "mock_response": "这是来自 ParaRouter 使用 {{model}} 的模拟回复。在实际集成中，这将通过 ParaRouter Gateway 路由到您选择的模型。",
     "new_chat_started": "新对话已开始。有什么可以帮您的吗？",
     "placeholder_message": "发送消息给 {{model}}...",
     "just_now": "刚刚"
   },
   "docs": {
     "documentation": "文档中心",
-    "build_with_openhub": "使用 OpenHub 构建",
+    "build_with_openhub": "使用 ParaRouter 构建",
     "the_unified_control_plane_for_": "面向高性能大模型管理的统一控制面板。\n一次集成，连接万物。",
     "ready_to_scale": "准备好扩展了吗？",
     "join_thousands_of_developers_b": "与数千名开发者一道，共同打造未来的 AI 应用。\n我们的基础架构专为高吞吐、低延迟的生产环境量身定制。",
@@ -137,7 +137,7 @@
   },
   "keys": {
     "api_keys": "API 密钥",
-    "manage_your_api_keys_to_authen": "管理您的 API 密钥，保障 OpenHub 接入安全。",
+    "manage_your_api_keys_to_authen": "管理您的 API 密钥，保障 ParaRouter 接入安全。",
     "create_key": "创建密钥",
     "your_api_keys_are_sensitive_in": "切记：API 密钥是非常敏感的信息。\n绝不要将其分享给他人或者提交到版本控制库里，创建完毕后此完整密钥只会展示一次。",
     "name": "名称",
@@ -152,13 +152,29 @@
     "cancel": "取消"
   },
   "login": {
-    "welcome_to_openhub": "欢迎访问 OpenHub",
+    "welcome_to_openhub": "欢迎访问 ParaRouter",
     "login": "登录",
     "register": "注册",
     "default_admin": "默认管理员:",
     "admin_admin123": "admin / admin123",
     "placeholder_password": "密码 (不少于 8 位)",
-    "placeholder_verification_code": "6 位验证码"
+    "placeholder_verification_code": "6 位验证码",
+    "sign_in_to_continue": "登录以继续访问。",
+    "create_your_account_with_email_verification": "通过邮件验证创建您的新账户。",
+    "placeholder_username_or_email": "用户名或邮箱",
+    "placeholder_login_password": "密码",
+    "signing_in": "正在登录...",
+    "sign_in": "登录",
+    "placeholder_username": "用户名",
+    "placeholder_email": "电子邮箱",
+    "placeholder_display_name": "显示名称（选填）",
+    "sending_code": "验证码发送中...",
+    "send_verification_code": "发送验证码",
+    "creating_account": "账户创建中...",
+    "verify_and_create_account": "验证并注册账户",
+    "verification_sent_message": "验证码已发送至您的邮箱，请注意查收。",
+    "request_failed": "请求未成功",
+    "registration_success_redirecting": "注册成功！3秒后自动为您跳转至登录页..."
   },
   "modelproviders": {
     "model_providers": "模型服务商",
@@ -368,7 +384,7 @@
     "cache_read": "缓存提取",
     "cache_write": "生成预存",
     "group": "模型归类",
-    "status": "运转机制",
+    "status": "运行状态",
     "updated": "配置时间",
     "actions": "运维操作",
     "loading_pricing": "正在拉取定价详情...",
@@ -412,7 +428,7 @@
     "placeholder_key": "sk-..."
   },
   "navbar": {
-    "openhub": "OpenHub",
+    "openhub": "ParaRouter",
     "0_00": "$0.00",
     "account": "账号配置",
     "api_keys": "全局凭证库",
