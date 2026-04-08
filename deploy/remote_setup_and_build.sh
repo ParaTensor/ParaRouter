@@ -8,13 +8,17 @@ GATEWAY_SERVICE="openhub-gateway"
 
 echo "--- Starting Remote Build and Setup ---"
 
+# 0. Stop running services first (proper deployment: stop → build → start)
+echo "Stopping existing services..."
+sudo systemctl stop $HUB_SERVICE || true
+sudo systemctl stop $GATEWAY_SERVICE || true
+
 # 1. Update and install basic dependencies
 sudo apt-get update
 sudo apt-get install build-essential pkg-config libssl-dev curl git postgresql postgresql-contrib -y
 
 # 1.1 Initialize Database if not exists
 echo "Initializing Database..."
-# Ensure postgresql is actively running before we try to connect
 sudo systemctl start postgresql || sudo systemctl restart postgresql || true
 sleep 3
 
@@ -32,7 +36,6 @@ if ! free | grep -i swap > /dev/null; then
 fi
 
 # 3. Install Rustup if missing
-# First, try to source the env to see if it's already installed
 [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
 
 if ! command -v rustc &> /dev/null; then
@@ -61,35 +64,33 @@ echo "Building Node workspace (Frontend / Hub / Shared)..."
 cd $PROJECT_DIR
 npm install
 npm run build -w @openhub/web
-# Note: npm install prepares node_modules for @openhub/hub since we run it at project root.
 
 # 7. Build Gateway (Rust)
 echo "Building Gateway (this may take a few minutes)..."
 cd $PROJECT_DIR/gateway
 cargo build --release
 
-# 7.1 Reclaim disk space! (CRITICAL for 10GB GCP VMs)
-echo "Extracting binary and sweeping rust compilation caches..."
+# 7.1 Extract binary and reclaim disk space (CRITICAL for 10GB GCP VMs)
+echo "Extracting binary and cleaning build caches..."
 mkdir -p $PROJECT_DIR/gateway/bin
-rm -f $PROJECT_DIR/gateway/bin/gateway || true
 cp target/release/gateway $PROJECT_DIR/gateway/bin/gateway
 rm -rf target/
 rm -rf ~/.cargo/registry/
 rm -rf /root/.cargo/registry/
 
-# 8. Restart Services
-echo "Configuring and Restarting Systemd Services..."
+# 8. Install service files and fix ownership
+echo "Configuring Systemd Services..."
 sudo cp $PROJECT_DIR/deploy/openhub-hub.service /etc/systemd/system/openhub-hub.service
 sudo cp $PROJECT_DIR/deploy/openhub-gateway.service /etc/systemd/system/openhub-gateway.service
 sudo systemctl daemon-reload
 
-# Fix ownership back to the execution user since 'sudo bash' created node_modules and target as root!
 sudo chown -R mac-m4:mac-m4 $PROJECT_DIR
 
+# 9. Start services
+echo "Starting services..."
 sudo systemctl enable $HUB_SERVICE
 sudo systemctl enable $GATEWAY_SERVICE
-
-sudo systemctl restart $HUB_SERVICE
-sudo systemctl restart $GATEWAY_SERVICE
+sudo systemctl start $HUB_SERVICE
+sudo systemctl start $GATEWAY_SERVICE
 
 echo "--- Deployment Complete ---"
