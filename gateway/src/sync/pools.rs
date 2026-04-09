@@ -1,5 +1,6 @@
 use sqlx::{Pool, Postgres};
 use std::collections::HashMap;
+use tracing::{info, warn};
 use unigateway_core::{
     Endpoint, LoadBalancingStrategy, ModelPolicy, ProviderKind, ProviderPool, RetryPolicy,
     SecretString, UniGatewayEngine,
@@ -23,10 +24,14 @@ pub async fn load_all_pools(db: &Pool<Postgres>, engine: &UniGatewayEngine) -> a
     .fetch_all(db)
     .await?;
 
-    let mut account_map = HashMap::new();
-    for acc in accounts {
-        account_map.insert(acc.id.clone(), acc);
-    }
+    let account_map: HashMap<String, AccountRow> =
+        accounts.into_iter().map(|a| (a.id.clone(), a)).collect();
+
+    info!(
+        "Pool sync: found {} active provider accounts: {:?}",
+        account_map.len(),
+        account_map.keys().collect::<Vec<_>>()
+    );
 
     #[derive(sqlx::FromRow)]
     struct KeyRow {
@@ -44,6 +49,8 @@ pub async fn load_all_pools(db: &Pool<Postgres>, engine: &UniGatewayEngine) -> a
     )
     .fetch_all(db)
     .await?;
+
+    info!("Pool sync: found {} active provider API keys", keys.len());
 
     let mut pool_endpoints: HashMap<String, Vec<Endpoint>> = HashMap::new();
     for key in keys {
@@ -73,6 +80,11 @@ pub async fn load_all_pools(db: &Pool<Postgres>, engine: &UniGatewayEngine) -> a
                 .entry(account.id.clone())
                 .or_default()
                 .push(endpoint);
+        } else {
+            warn!(
+                "Pool sync: key {} references unknown account '{}', skipping",
+                key.id, key.provider_account_id
+            );
         }
     }
 
@@ -81,6 +93,12 @@ pub async fn load_all_pools(db: &Pool<Postgres>, engine: &UniGatewayEngine) -> a
 
     for (account_id, endpoints) in pool_endpoints {
         if let Some(account) = account_map.get(&account_id) {
+            info!(
+                "Pool sync: registering pool '{}' ({}) with {} endpoint(s)",
+                account_id,
+                account.base_url,
+                endpoints.len()
+            );
             let pool = ProviderPool {
                 pool_id: account_id.clone(),
                 endpoints,
@@ -93,6 +111,12 @@ pub async fn load_all_pools(db: &Pool<Postgres>, engine: &UniGatewayEngine) -> a
             current_pool_ids.insert(account_id);
         }
     }
+
+    info!(
+        "Pool sync: {} pool(s) active in engine: {:?}",
+        current_pool_ids.len(),
+        current_pool_ids
+    );
 
     // Cleanup pools that are no longer active in the DB
     let active_pools = engine.list_pools().await;

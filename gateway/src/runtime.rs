@@ -42,14 +42,10 @@ impl RuntimeEngineHost for OpenHubRuntime {
 impl RuntimePoolHost for OpenHubRuntime {
     fn pool_for_service<'a>(
         &'a self,
-        _service_id: &'a str,
+        service_id: &'a str,
     ) -> RuntimeFuture<'a, Result<Option<ProviderPool>>> {
         Box::pin(async move {
-            // Hot-path database reads are disabled in favor of background snapshot synchronization
-            // provided by `src/sync/bootstrap.rs` -> `load_all_pools`.
-            // Because unigateway_runtime checks `core_engine().get_pool()` first,
-            // returning Ok(None) here safely enforces reliance on the in-memory engine state.
-            Ok(None)
+            Ok(self.engine.get_pool(service_id).await)
         })
     }
 }

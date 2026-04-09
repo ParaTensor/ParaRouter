@@ -1,6 +1,6 @@
 [package]
 name = "gateway"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2021"
 authors = ["lipicoder@qq.com"]
 description = "A high-performance LLM gateway with a CLI-only control plane and OpenAI-compatible data plane. Features unified provider routing, priority-based load balancing, and production-ready rate limiting."
@@ -72,3 +72,8 @@ async-stream = "0.3.6"
 [dev-dependencies]
 tempfile = "3.0"
 reqwest = { version = "0.12", features = ["json", "blocking", "rustls-tls"] }
+
+[[bin]]
+name = "test_policy"
+path = "src/test_policy.rs"
+

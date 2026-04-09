@@ -17,26 +17,31 @@ export default function DocsView() {
     {
       title: 'Quick Start',
       icon: Zap,
-      content: 'Get up and running with ParaRouter in minutes. Our unified API allows you to access multiple LLMs with a single integration.',
+      content: 'Get up and running with ParaRouter in minutes. Our endpoint is fully compatible with the standard OpenAI format.',
       code: `curl https://api.pararouter.com/v1/chat/completions \\
   -H "Content-Type: application/json" \\
-  -H "Authorization: Bearer $PARAROUTER_API_KEY" \\
+  -H "Authorization: Bearer sk-oh-v1-..." \\
   -d '{
-    "model": "anthropic/claude-3.5-sonnet",
+    "model": "gpt-5.4-pro",
     "messages": [{"role": "user", "content": "Hello!"}]
   }'`
     },
     {
       title: 'Authentication',
       icon: Shield,
-      content: 'ParaRouter uses API keys to authenticate requests. You can manage your keys in the Keys dashboard.',
+      content: 'ParaRouter uses API keys to authenticate requests. You can manage your keys in the Keys dashboard (e.g., sk-oh-v1-...).',
       code: 'Authorization: Bearer <YOUR_API_KEY>'
     },
     {
-      title: 'Model Routing',
+      title: 'OpenAI SDK Compatibility',
       icon: Globe,
-      content: 'Route requests to specific models or use our intelligent routing to find the best provider based on latency, cost, or performance.',
-      code: '"model": "pararouter/auto" // Automatically routes to the best model'
+      content: 'Use standard OpenAI SDKs or HTTP clients. Just point the baseURL to ParaRouter and use the specific model ID from our Model Library.',
+      code: `import OpenAI from 'openai';
+
+const client = new OpenAI({
+  baseURL: 'https://api.pararouter.com/v1',
+  apiKey: 'sk-oh-v1-...', // Your ParaRouter API Key
+});`
     }
   ];
 

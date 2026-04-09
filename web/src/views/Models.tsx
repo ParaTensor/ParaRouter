@@ -78,9 +78,14 @@ export default function ModelsView() {
                   <div className="w-9 h-9 rounded-lg bg-zinc-50 border border-gray-100 flex items-center justify-center font-bold text-zinc-300 text-lg">
                     {model.provider ? model.provider[0] : '?'}
                   </div>
-                  <div>
-                    <h3 className="font-bold text-[15px] text-zinc-900 leading-tight">{model.name}</h3>
-                    <p className="text-xs text-zinc-400 font-medium">{model.provider}</p>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-[15px] text-zinc-900 leading-tight flex items-center flex-wrap gap-2">
+                      {model.name}
+                      <span className="font-mono text-[10px] bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded border border-zinc-200 truncate">
+                        {model.id}
+                      </span>
+                    </h3>
+                    <p className="text-xs text-zinc-400 font-medium mt-1 truncate">{model.provider}</p>
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1">

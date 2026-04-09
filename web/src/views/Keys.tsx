@@ -23,6 +23,12 @@ export default function KeysView() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [notification, setNotification] = useState<{message: string; type: 'success' | 'error'} | null>(null);
+
+  const showNotification = (msg: string, type: 'success' | 'error' = 'success') => {
+    setNotification({ message: msg, type });
+    setTimeout(() => setNotification(null), 5000);
+  };
 
   const loadKeys = async () => {
     try {
@@ -53,9 +59,10 @@ export default function KeysView() {
       setNewKeyName('');
       setIsModalOpen(false);
       await loadKeys();
-    } catch (error) {
+      showNotification(t('keys.create_success', 'Key created successfully'), 'success');
+    } catch (error: any) {
       console.error('Failed to create key:', error);
-      alert('Failed to create key. Check console for details.');
+      showNotification(error?.message || 'Failed to create key. Please try again.', 'error');
     }
   };
 
@@ -64,8 +71,10 @@ export default function KeysView() {
     try {
       await apiDelete(`/api/user-api-keys/${id}`);
       await loadKeys();
-    } catch (error) {
+      showNotification(t('keys.delete_success', 'Key deleted successfully'), 'success');
+    } catch (error: any) {
       console.error('Failed to delete key:', error);
+      showNotification(error?.message || 'Failed to delete key.', 'error');
     }
   };
 
@@ -84,7 +93,21 @@ export default function KeysView() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 relative">
+      {notification && (
+        <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-[999] px-6 py-3 rounded-xl shadow-2xl border flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 ${
+          notification.type === 'success' 
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+            : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          <div className={`w-2 h-2 rounded-full ${notification.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'} animate-pulse`} />
+          <span className="text-sm font-bold">{notification.message}</span>
+          <button onClick={() => setNotification(null)} className="ml-2 p-1 hover:bg-black/5 rounded-md transition-colors">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{t('keys.api_keys')}</h1>

@@ -5,9 +5,8 @@ import { normalizeProviderId, providerBaseUrls } from '../utils';
 import { requireRole } from '../middleware/auth';
 
 const router = Router();
-router.use(requireRole('admin'));
 
-router.get('/provider-types', async (_req, res) => {
+router.get('/provider-types', requireRole('admin'), async (_req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, label, base_url, driver_type, models, enabled, sort_order, docs_url
@@ -22,7 +21,7 @@ router.get('/provider-types', async (_req, res) => {
 });
 
 
-router.get('/provider-keys', async (_req, res) => {
+router.get('/provider-keys', requireRole('admin'), async (_req, res) => {
   try {
     const { rows: accounts } = await pool.query(
       `SELECT id AS provider, status, provider_type, label, base_url, COALESCE(docs_url, '') AS docs_url
@@ -49,7 +48,7 @@ router.get('/provider-keys', async (_req, res) => {
   }
 });
 
-router.put('/provider-keys/:provider', async (req, res) => {
+router.put('/provider-keys/:provider', requireRole('admin'), async (req, res) => {
   try {
     const provider = normalizeProviderId(req.params.provider || '');
     const { status, label, base_url, docs_url, driver_type, keys } = req.body || {};
@@ -154,7 +153,7 @@ router.put('/provider-keys/:provider', async (req, res) => {
     res.status(500).json({ error: String(error) });
   }
 });
-router.delete('/provider-keys/:provider', async (req, res) => {
+router.delete('/provider-keys/:provider', requireRole('admin'), async (req, res) => {
   try {
     const provider = normalizeProviderId(req.params.provider || '');
     await pool.query('DELETE FROM provider_accounts WHERE id = $1', [provider]);

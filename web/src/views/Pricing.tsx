@@ -338,7 +338,7 @@ export default function PricingView() {
   return (
     <div className="space-y-6 relative">
       {notification && (
-        <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-xl shadow-2xl border flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 ${
+        <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-[999] px-6 py-3 rounded-xl shadow-2xl border flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 ${
           notification.type === 'success' 
             ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
             : 'bg-red-50 border-red-200 text-red-800'

@@ -15,7 +15,8 @@ pub async fn resolve_model_target(
     #[derive(sqlx::FromRow)]
     struct PricingRow {
         provider_account_id: String,
-        _is_top_provider: bool,
+        #[allow(dead_code)]
+        is_top_provider: bool,
     }
 
     // Lookup active pricings for this model to find a target provider account
