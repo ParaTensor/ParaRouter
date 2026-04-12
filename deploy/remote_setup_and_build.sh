@@ -128,8 +128,10 @@ sudo chown -R root:root $PROJECT_DIR
 # 8.5 Install Cloudflare Tunnel
 if [ -n "$TUNNEL_TOKEN" ]; then
     echo "Installing Cloudflare Tunnel (cloudflared)..."
-    if [ -f "$PROJECT_DIR/cloudflared" ]; then
-        sudo mv $PROJECT_DIR/cloudflared /usr/local/bin/
+    if ! command -v cloudflared &> /dev/null; then
+        echo "Downloading cloudflared via proxy..."
+        curl -L --output cloudflared "https://mirror.ghproxy.com/https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" || curl -L --output cloudflared "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
+        sudo mv cloudflared /usr/local/bin/
         sudo chmod +x /usr/local/bin/cloudflared
     fi
     sudo cloudflared service uninstall || true
