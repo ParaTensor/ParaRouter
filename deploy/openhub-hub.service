@@ -10,6 +10,7 @@ ExecStart=/usr/bin/npm run dev -w @openhub/hub
 Restart=always
 RestartSec=3
 EnvironmentFile=-/root/.openhub.env
+Environment=NODE_ENV=production
 Environment=PORT=3000
 Environment=DATABASE_URL=postgres://xinference:password@localhost:5432/openhub
 
