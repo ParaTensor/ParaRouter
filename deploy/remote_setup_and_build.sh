@@ -132,19 +132,16 @@ if [ -n "$TUNNEL_TOKEN" ]; then
     # Clean up any potential broken binary
     sudo rm -f /usr/local/bin/cloudflared
     
-    echo "Downloading cloudflared via proxy..."
-    wget -O /tmp/cloudflared "https://ghproxy.net/https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" || \
-    wget -O /tmp/cloudflared "https://hub.gitmirror.com/https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" || \
-    wget -O /tmp/cloudflared "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
-    
-    # Verify the binary is not an HTML error page (should be > 10MB)
-    if [ ! -s /tmp/cloudflared ] || [ $(wc -c < /tmp/cloudflared) -lt 10000000 ]; then
-        echo "ERROR: Failed to download a valid cloudflared binary."
-        exit 1
+    if [ -f "$PROJECT_DIR/cloudflared" ]; then
+        sudo mv $PROJECT_DIR/cloudflared /usr/local/bin/
+        sudo chmod +x /usr/local/bin/cloudflared
     fi
     
-    sudo mv /tmp/cloudflared /usr/local/bin/cloudflared
-    sudo chmod +x /usr/local/bin/cloudflared
+    # Verify the binary exists and has a reasonable size
+    if [ ! -s /usr/local/bin/cloudflared ] || [ $(wc -c < /usr/local/bin/cloudflared) -lt 10000000 ]; then
+        echo "ERROR: Missing or invalid cloudflared binary!"
+        exit 1
+    fi
     
     sudo cloudflared service uninstall || true
     sudo rm -rf /etc/cloudflared/cert.pem /etc/cloudflared/config.yml || true
