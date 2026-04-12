@@ -132,25 +132,25 @@ sudo chown -R $USER:$USER $PROJECT_DIR
 if [ -n "$TUNNEL_TOKEN" ]; then
     echo "Installing Cloudflare Tunnel (cloudflared)..."
     
-    # Clean up any potential broken binary
-    sudo rm -f /usr/local/bin/cloudflared
-    
-    if [ -f "$PROJECT_DIR/cloudflared" ]; then
-        sudo mv $PROJECT_DIR/cloudflared /usr/local/bin/
-        sudo chmod +x /usr/local/bin/cloudflared
+    if ! command -v cloudflared &> /dev/null; then
+        echo "Cloudflared not found. Installing natively via Cloudflare APT repository..."
+        sudo mkdir -p --mode=0755 /usr/share/keyrings
+        curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+        echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' | sudo tee /etc/apt/sources.list.d/cloudflared.list
+        sudo apt-get update
+        sudo apt-get install cloudflared -y
     fi
     
-    # Verify the binary exists and has a reasonable size
-    if [ ! -s /usr/local/bin/cloudflared ] || [ $(wc -c < /usr/local/bin/cloudflared) -lt 10000000 ]; then
-        echo "ERROR: Missing or invalid cloudflared binary!"
-        exit 1
+    if systemctl is-active --quiet cloudflared; then
+        echo "Cloudflared tunnel is already active. Skipping re-registration."
+    else
+        echo "Registering cloudflared service..."
+        sudo cloudflared service uninstall || true
+        sudo rm -rf /etc/cloudflared/cert.pem /etc/cloudflared/config.yml || true
+        sudo cloudflared service install "$TUNNEL_TOKEN"
+        sudo systemctl enable cloudflared
+        sudo systemctl restart cloudflared
     fi
-    
-    sudo cloudflared service uninstall || true
-    sudo rm -rf /etc/cloudflared/cert.pem /etc/cloudflared/config.yml || true
-    sudo cloudflared service install "$TUNNEL_TOKEN"
-    sudo systemctl enable cloudflared
-    sudo systemctl restart cloudflared
 else
     echo "No TUNNEL_TOKEN provided, skipping cloudflared setup."
 fi
