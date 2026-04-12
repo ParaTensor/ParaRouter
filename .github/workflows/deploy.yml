@@ -10,6 +10,7 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       SERVER_IP: "1.13.23.141"
       SERVER_USER: "root"
+      TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
 
     steps:
       - name: Checkout Code
@@ -52,5 +53,5 @@ jobs:
             # Execute setup script
             cd $DEST_DIR
             chmod +x deploy/remote_setup_and_build.sh
-            bash deploy/remote_setup_and_build.sh
+            TUNNEL_TOKEN=\"$TUNNEL_TOKEN\" bash deploy/remote_setup_and_build.sh
           "
