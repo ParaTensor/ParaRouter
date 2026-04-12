@@ -128,17 +128,29 @@ sudo chown -R root:root $PROJECT_DIR
 # 8.5 Install Cloudflare Tunnel
 if [ -n "$TUNNEL_TOKEN" ]; then
     echo "Installing Cloudflare Tunnel (cloudflared)..."
-    if ! command -v cloudflared &> /dev/null; then
-        echo "Downloading cloudflared via proxy..."
-        curl -L --output cloudflared "https://mirror.ghproxy.com/https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" || curl -L --output cloudflared "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
-        sudo mv cloudflared /usr/local/bin/
-        sudo chmod +x /usr/local/bin/cloudflared
+    
+    # Clean up any potential broken binary
+    sudo rm -f /usr/local/bin/cloudflared
+    
+    echo "Downloading cloudflared via proxy..."
+    wget -qO /tmp/cloudflared "https://ghproxy.net/https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" || \
+    wget -qO /tmp/cloudflared "https://hub.gitmirror.com/https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" || \
+    wget -qO /tmp/cloudflared "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
+    
+    # Verify the binary is not an HTML error page (should be > 10MB)
+    if [ ! -s /tmp/cloudflared ] || [ $(wc -c < /tmp/cloudflared) -lt 10000000 ]; then
+        echo "ERROR: Failed to download a valid cloudflared binary."
+        exit 1
     fi
+    
+    sudo mv /tmp/cloudflared /usr/local/bin/cloudflared
+    sudo chmod +x /usr/local/bin/cloudflared
+    
     sudo cloudflared service uninstall || true
     sudo rm -rf /etc/cloudflared/cert.pem /etc/cloudflared/config.yml || true
-    sudo cloudflared service install "$TUNNEL_TOKEN" || true
-    sudo systemctl enable cloudflared || true
-    sudo systemctl restart cloudflared || true
+    sudo cloudflared service install "$TUNNEL_TOKEN"
+    sudo systemctl enable cloudflared
+    sudo systemctl restart cloudflared
 else
     echo "No TUNNEL_TOKEN provided, skipping cloudflared setup."
 fi
