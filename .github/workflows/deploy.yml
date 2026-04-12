@@ -23,6 +23,11 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H $SERVER_IP >> ~/.ssh/known_hosts
 
+      - name: Download Cloudflared Binary
+        run: |
+          curl -L --output ./cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          chmod +x ./cloudflared
+
       - name: Sync Source to Server
         run: |
           DEST_DIR="/root/openhub"
@@ -37,7 +42,7 @@ jobs:
           "
           
           echo "2. Uploading files to temporary directory..."
-          rsync -avz --exclude '.git' --exclude 'node_modules' --exclude 'target' -e "ssh -i ~/.ssh/deploy_key" ./deploy ./package.json ./package-lock.json ./gateway ./hub ./web ./packages $SERVER_USER@$SERVER_IP:$TMP_DIR/
+          rsync -avz --exclude '.git' --exclude 'node_modules' --exclude 'target' -e "ssh -i ~/.ssh/deploy_key" ./cloudflared ./deploy ./package.json ./package-lock.json ./gateway ./hub ./web ./packages $SERVER_USER@$SERVER_IP:$TMP_DIR/
           
           echo "3. Moving files to final destination and building..."
           ssh -i ~/.ssh/deploy_key $SERVER_USER@$SERVER_IP "
