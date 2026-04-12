@@ -25,8 +25,8 @@ jobs:
 
       - name: Sync Source to Server
         run: |
-          DEST_DIR="/home/$SERVER_USER/openhub"
-          TMP_DIR="/home/$SERVER_USER/openhub-tmp"
+          DEST_DIR="/home/$SERVER_USER/pararouter"
+          TMP_DIR="/home/$SERVER_USER/pararouter-tmp"
           
           echo "1. Preparing remote temporary directory and freeing space..."
           ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=120 -i ~/.ssh/deploy_key $SERVER_USER@$SERVER_IP "
