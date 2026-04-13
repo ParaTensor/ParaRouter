@@ -5,11 +5,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use unigateway_core::hooks::{AttemptFinishedEvent, AttemptStartedEvent, GatewayHooks};
 use unigateway_core::response::RequestReport;
 
-pub struct OpenHubHooks {
+pub struct ParaRouterHooks {
     pub db: Pool<Postgres>,
 }
 
-impl GatewayHooks for OpenHubHooks {
+impl GatewayHooks for ParaRouterHooks {
     fn on_attempt_started(&self, _event: AttemptStartedEvent) -> BoxFuture<'static, ()> {
         // No-op for now
         Box::pin(async {})

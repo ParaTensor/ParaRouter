@@ -1,7 +1,7 @@
 grok:
 **不需要必须在设置「服务提供商」（Provider / Channel）的时候就输入价格！**
 
-这是 **openhub 复刻 OpenRouter / new-api 时的最佳实践**，强烈建议你**把 Provider 配置 和 价格管理 完全解耦**，这样后面你加几十个、上百个服务提供商时管理起来才不会崩溃。
+这是 **pararouter 复刻 OpenRouter / new-api 时的最佳实践**，强烈建议你**把 Provider 配置 和 价格管理 完全解耦**，这样后面你加几十个、上百个服务提供商时管理起来才不会崩溃。
 
 ### 1. 为什么推荐解耦？（实际痛点）
 - **一个模型可能被多个 Provider 支持**（比如 GPT-4o 有 OpenAI 官方通道 + Azure 通道 + 第三方中转通道）。
@@ -9,9 +9,9 @@ grok:
 - new-api（你之前参考的中国版）就是这么做的：**渠道管理**只管「能不能连得上」，**价格/倍率**在独立页面统一管理。
 - OpenRouter 本身也是全局模型价格 + Provider 只是路由入口。
 
-**结论**：在 openhub 后台添加 Provider 时，**只填技术连接信息**，价格**可选填成本价（上游真实价）**，真正卖给用户的价格在**单独的「模型价格 / 倍率设置」页面**统一维护。
+**结论**：在 pararouter 后台添加 Provider 时，**只填技术连接信息**，价格**可选填成本价（上游真实价）**，真正卖给用户的价格在**单独的「模型价格 / 倍率设置」页面**统一维护。
 
-### 2. 推荐的 openhub 后台设计（两个独立模块）
+### 2. 推荐的 pararouter 后台设计（两个独立模块）
 
 #### **模块①：服务提供商管理（Provider / Channel 列表）**
 这里**不需要输入完整价格**，只需要这些字段（参考 new-api + OpenRouter）：
@@ -68,8 +68,8 @@ const finalPrice = channelOverride || globalPrice;
 const cost = calculateCost(finalPrice, usage) * (channel.markup_rate || 1.0);
 ```
 
-### 4. 给 openhub 的快速实现建议
-1. **如果 openhub 当前已经有了 Provider 管理页面**  
+### 4. 给 pararouter 的快速实现建议
+1. **如果 pararouter 当前已经有了 Provider 管理页面**  
    - 直接把「价格」字段**删除或改成可选的成本价**，别让用户每次都填。
    - 新增一个独立的 `/admin/pricing` 页面（用 shadcn + table 几分钟就能搞定）。
 
@@ -140,7 +140,7 @@ $$Cost (Quota) = \lceil (Input \times InputRatio + Output \times OutputRatio) \t
 
 ### 3. 动态汇率 vs 固定汇率
 
-在处理 `OpenHub` 的商业化时，你有两种选择：
+在处理 `ParaRouter` 的商业化时，你有两种选择：
 
 1.  **固定汇率（推荐）**：
     * 在后台设置一个手动汇率（比如 1 USD = 7.2 CNY）。
@@ -198,7 +198,7 @@ OpenRouter 允许用户在 Header 中看到每个请求的消费金额。
 你目前的支付接口是接国内的（微信/支付宝）多，还是接 Stripe 之类的国际支付多？这决定了你汇率更新的频率。
 
 
-为了让 **OpenHub** 既能承接国内 `new-api` 的生态（各种集成插件），又能具备 `OpenRouter` 的灵活性（多模型路由、透明计费），我们需要一套**“双轨制”**计费方案。
+为了让 **ParaRouter** 既能承接国内 `new-api` 的生态（各种集成插件），又能具备 `OpenRouter` 的灵活性（多模型路由、透明计费），我们需要一套**“双轨制”**计费方案。
 
 核心思路是：**底层使用高精度的微单位（Integer Base），上层映射不同的计费逻辑。**
 
@@ -289,9 +289,9 @@ return new_balance -- 返回扣费后的余额
 
 ---
 
-### 6. 给 OpenHub 的差异化建议
+### 6. 给 ParaRouter 的差异化建议
 
-* **缓存折扣 (The "OpenHub Discount")**：
+* **缓存折扣 (The "ParaRouter Discount")**：
     * 如果请求命中了你的 **Redis 语义缓存**，在计费逻辑里设置一个 `CacheRatio = 0.1`。
     * **理由**：你节省了上游 API 费用，同时给用户提供了更便宜、更快的响应，这是 OpenRouter 目前没做到的“平替”优势。
 * **失败重试不计费**：

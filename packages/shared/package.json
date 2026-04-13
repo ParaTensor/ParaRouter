@@ -1,5 +1,5 @@
 {
-  "name": "@openhub/shared",
+  "name": "@pararouter/shared",
   "version": "1.0.5",
   "type": "module",
   "main": "src/index.ts",

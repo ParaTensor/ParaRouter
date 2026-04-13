@@ -14,7 +14,7 @@ export type AuthSession = {
   user: LocalUser;
 };
 
-const SESSION_KEY = 'openhub.auth.session';
+const SESSION_KEY = 'pararouter.auth.session';
 
 function guestUser(): LocalUser {
   return {
@@ -67,13 +67,13 @@ export function isAuthenticated(): boolean {
 export function setAuthSession(session: AuthSession): void {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  window.dispatchEvent(new Event('openhub-auth-changed'));
+  window.dispatchEvent(new Event('pararouter-auth-changed'));
 }
 
 export function clearAuthSession(): void {
   if (typeof window === 'undefined') return;
   window.localStorage.removeItem(SESSION_KEY);
-  window.dispatchEvent(new Event('openhub-auth-changed'));
+  window.dispatchEvent(new Event('pararouter-auth-changed'));
 }
 
 export const localUser: LocalUser = new Proxy({} as LocalUser, {

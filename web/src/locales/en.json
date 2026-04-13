@@ -70,9 +70,9 @@
   },
   "chat": {
     "new_chat": "New Chat",
-    "openhub_assistant": "ParaRouter Assistant",
+    "pararouter_assistant": "ParaRouter Assistant",
     "system_online": "System Online",
-    "openhub_uses_multiple_models_r": "ParaRouter uses multiple models, results may vary in accuracy.",
+    "pararouter_uses_multiple_models_r": "ParaRouter uses multiple models, results may vary in accuracy.",
     "placeholder_search": "Search chats...",
     "yesterday": "Yesterday",
     "assistant_greeting": "Hello! I'm the ParaRouter assistant. How can I help you with your AI models today?",
@@ -83,7 +83,7 @@
   },
   "docs": {
     "documentation": "Documentation",
-    "build_with_openhub": "Build with ParaRouter",
+    "build_with_pararouter": "Build with ParaRouter",
     "the_unified_control_plane_for_": "The unified control plane for high-performance LLM management.\nOne integration, infinite possibilities.",
     "ready_to_scale": "Ready to scale?",
     "join_thousands_of_developers_b": "Join thousands of developers building the future of AI.\nOur infrastructure is built for production-grade throughput and low latency.",
@@ -152,7 +152,7 @@
     "cancel": "Cancel"
   },
   "login": {
-    "welcome_to_openhub": "Welcome to ParaRouter",
+    "welcome_to_pararouter": "Welcome to ParaRouter",
     "login": "Login",
     "register": "Register",
     "default_admin": "Default admin:",
@@ -421,7 +421,7 @@
     "placeholder_key": "sk-..."
   },
   "navbar": {
-    "openhub": "ParaRouter",
+    "pararouter": "ParaRouter",
     "0_00": "$0.00",
     "account": "Account",
     "api_keys": "API Keys",

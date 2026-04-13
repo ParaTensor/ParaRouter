@@ -316,7 +316,7 @@ export default function ChatView() {
                 <Sparkles size={20} />
               </div>
               <div>
-                <h3 className="font-bold text-sm">{t('chat.openhub_assistant')}</h3>
+                <h3 className="font-bold text-sm">{t('chat.pararouter_assistant')}</h3>
                 <div className="flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">{t('chat.system_online')}</span>
@@ -436,7 +436,7 @@ export default function ChatView() {
             </button>
           </div>
           <p className="text-center text-[10px] text-zinc-400 mt-4 font-medium uppercase tracking-widest">
-            {t('chat.openhub_uses_multiple_models_r')}</p>
+            {t('chat.pararouter_uses_multiple_models_r')}</p>
         </div>
       </div>
     </div>

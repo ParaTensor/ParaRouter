@@ -1,5 +1,5 @@
 {
-  "name": "OpenHub",
-  "description": "The open standard for AI model routing, billing, and management. High-performance gateway powered by OpenHub Gateway.",
+  "name": "ParaRouter",
+  "description": "The open standard for AI model routing, billing, and management. High-performance gateway powered by ParaRouter Gateway.",
   "requestFramePermissions": []
 }

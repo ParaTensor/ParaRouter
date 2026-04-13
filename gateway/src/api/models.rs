@@ -8,11 +8,11 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::auth::keys::AuthenticatedUser;
-use crate::runtime::OpenHubRuntime;
+use crate::runtime::ParaRouterRuntime;
 
 pub async fn list_models(
     _auth: AuthenticatedUser,
-    State(runtime): State<Arc<OpenHubRuntime>>,
+    State(runtime): State<Arc<ParaRouterRuntime>>,
 ) -> Response {
     let pool = &runtime.db;
 
@@ -56,7 +56,7 @@ pub async fn list_models(
                 "id": row.model_id,
                 "object": "model",
                 "created": now,
-                "owned_by": "openhub"
+                "owned_by": "pararouter"
             })
         })
         .collect();

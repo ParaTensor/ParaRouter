@@ -1,9 +1,9 @@
-**OpenHub + xtrace 可观测性集成文档 v1.0**
+**ParaRouter + xtrace 可观测性集成文档 v1.0**
 
-**目标**：在 OpenHub 单体 Rust 后端（Axum）中集成 xtrace，实现 LLM 全链路 trace、observation、metrics 和 Dashboard。
+**目标**：在 ParaRouter 单体 Rust 后端（Axum）中集成 xtrace，实现 LLM 全链路 trace、observation、metrics 和 Dashboard。
 
 ### 1. 前置条件
-- OpenHub 已完成高内聚单体重构（Rust + Axum）。
+- ParaRouter 已完成高内聚单体重构（Rust + Axum）。
 - xtrace 服务已独立部署（https://github.com/lipish/xtrace）。
 - 环境变量准备：
   - `XTRACE_BASE_URL=http://xtrace:8742`
@@ -99,7 +99,7 @@ tracing::info!(
 ### 3. Docker Compose 联合部署（docker-compose.yml）
 ```yaml
 services:
-  openhub:
+  pararouter:
     build: ./backend
     ports:
       - "3000:3000"
@@ -122,10 +122,10 @@ services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_DB: openhub,xtrace
+      POSTGRES_DB: pararouter,xtrace
 ```
 
-### 4. 前端 Dashboard 嵌入（OpenHub frontend）
+### 4. 前端 Dashboard 嵌入（ParaRouter frontend）
 
 **步骤 4.1：在 frontend/.env 添加**
 ```
@@ -157,14 +157,14 @@ case 'observability':
 ```
 
 ### 5. 测试验证
-1. 重启 OpenHub。
+1. 重启 ParaRouter。
 2. 通过 ChatView 发送一次请求。
 3. 打开 xtrace Dashboard（http://localhost:8742）：
    - 看到带 session_id 的 trace 树。
    - 看到 llm_tokens_*、llm_cost_usd、llm_latency_ms 等 metrics。
 4. 查询 metrics：
    ```rust
-   // 可在 OpenHub 内部加一个 /api/metrics/test endpoint 调用 client.query_metrics
+   // 可在 ParaRouter 内部加一个 /api/metrics/test endpoint 调用 client.query_metrics
    ```
 
 ### 6. 配置参考表

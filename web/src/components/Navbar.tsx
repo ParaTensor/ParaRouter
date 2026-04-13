@@ -46,7 +46,7 @@ export default function Navbar() {
             <div className="w-7 h-7 bg-black rounded flex items-center justify-center transition-transform group-hover:scale-105">
               <div className="w-3.5 h-3.5 bg-white rounded-sm rotate-45" />
             </div>
-            <span className="font-bold text-lg tracking-tight">{t('navbar.openhub')}</span>
+            <span className="font-bold text-lg tracking-tight">{t('navbar.pararouter')}</span>
           </Link>
 
           <div className="hidden md:flex items-center gap-1">

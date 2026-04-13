@@ -10,7 +10,7 @@ Authors: UniGateway maintainers
 
 This RFC defines the target architecture and public API direction for a future `unigateway-core` crate.
 
-The crate is intended to serve as a reusable, database-agnostic, in-memory LLM proxy and scheduling engine. It is designed to be embedded by upper-layer systems such as OpenHub, which remain responsible for authentication, billing, control-plane storage, and routing-state production.
+The crate is intended to serve as a reusable, database-agnostic, in-memory LLM proxy and scheduling engine. It is designed to be embedded by upper-layer systems such as ParaRouter, which remain responsible for authentication, billing, control-plane storage, and routing-state production.
 
 The core crate must remain focused on four concerns:
 
@@ -29,9 +29,9 @@ The current UniGateway project is optimized as an end-user binary and local gate
 - product-facing CLI flows
 - gateway API key lifecycle logic
 
-For upper-layer systems such as OpenHub, the desired integration model is different.
+For upper-layer systems such as ParaRouter, the desired integration model is different.
 
-OpenHub should own:
+ParaRouter should own:
 
 - authentication
 - quota and billing checks

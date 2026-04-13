@@ -70,9 +70,9 @@
   },
   "chat": {
     "new_chat": "新对话",
-    "openhub_assistant": "ParaRouter 助手",
+    "pararouter_assistant": "ParaRouter 助手",
     "system_online": "系统在线",
-    "openhub_uses_multiple_models_r": "ParaRouter 调用多方模型，回复内容的准确性可能会有所不同。",
+    "pararouter_uses_multiple_models_r": "ParaRouter 调用多方模型，回复内容的准确性可能会有所不同。",
     "placeholder_search": "搜索对话...",
     "yesterday": "昨天",
     "assistant_greeting": "你好！我是 ParaRouter 助手。今天有什么可以帮您的吗？",
@@ -83,7 +83,7 @@
   },
   "docs": {
     "documentation": "文档中心",
-    "build_with_openhub": "使用 ParaRouter 构建",
+    "build_with_pararouter": "使用 ParaRouter 构建",
     "the_unified_control_plane_for_": "面向高性能大模型管理的统一控制面板。\n一次集成，连接万物。",
     "ready_to_scale": "准备好扩展了吗？",
     "join_thousands_of_developers_b": "与数千名开发者一道，共同打造未来的 AI 应用。\n我们的基础架构专为高吞吐、低延迟的生产环境量身定制。",
@@ -152,7 +152,7 @@
     "cancel": "取消"
   },
   "login": {
-    "welcome_to_openhub": "欢迎访问 ParaRouter",
+    "welcome_to_pararouter": "欢迎访问 ParaRouter",
     "login": "登录",
     "register": "注册",
     "default_admin": "默认管理员:",
@@ -430,7 +430,7 @@
     "placeholder_key": "sk-..."
   },
   "navbar": {
-    "openhub": "ParaRouter",
+    "pararouter": "ParaRouter",
     "0_00": "$0.00",
     "account": "账号配置",
     "api_keys": "全局凭证库",

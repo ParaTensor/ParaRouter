@@ -1,5 +1,5 @@
 const pg = require('pg');
-const pool = new pg.Pool({ connectionString: 'postgresql://postgres:postgres@localhost:5432/openhub' });
+const pool = new pg.Pool({ connectionString: 'postgresql://postgres:postgres@localhost:5432/pararouter' });
 
 async function run() {
   const provider = 'memtensor';

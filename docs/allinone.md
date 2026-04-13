@@ -1,4 +1,4 @@
-**OpenHub 高内聚方案设计文档 v1.0**  
+**ParaRouter 高内聚方案设计文档 v1.0**  
 （Hub + Gateway 合并成单体后端 + 前端纯静态）
 
 **文档目的**：  
@@ -25,7 +25,7 @@ graph TD
 ### 2. 项目目录结构（最终形态）
 
 ```
-openhub/
+pararouter/
 ├── backend/                  # 单体后端（推荐 Rust）
 │   ├── src/
 │   │   ├── main.rs           # 入口（Axum server）
@@ -110,7 +110,7 @@ openhub/
 **docker-compose.yml**（单容器）：
 ```yaml
 services:
-  openhub:
+  pararouter:
     build: .
     ports:
       - "3000:3000"
@@ -122,7 +122,7 @@ services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_DB: openhub
+      POSTGRES_DB: pararouter
 ```
 
 **生产部署**：单个 Rust binary + Nginx 前端静态 + Postgres。

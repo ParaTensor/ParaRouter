@@ -1,14 +1,14 @@
-# OpenHub Gateway 1.0.0 Refactoring Summary
+# ParaRouter Gateway 1.0.0 Refactoring Summary
 **Date:** 2026-04-07
 **Status:** Completed
 
-This document outlines the architectural shift and implementation steps undertaken to safely transition the OpenHub Gateway onto the new lightweight `unigateway-core` engine.
+This document outlines the architectural shift and implementation steps undertaken to safely transition the ParaRouter Gateway onto the new lightweight `unigateway-core` engine.
 
 ## 核心重构理念 (Core Refactoring Philosophy)
 
 本次重构的最核心动力，是将高并发网关从**“沉重的数据库绑定” (Heavy monolith)** 的旧版模型中剥离出来，进化为完全利用常驻内存进行极速调度代理的 **“Micro-Kernel Shell”** 模型。
 
-底层繁重且易错的串流与并发失败重试等内核机制交由不包含任何存储业务逻辑的 `unigateway-core` 库承担，而 OpenHub Gateway 作为包壳层 (Shell) 将专注负责它特有的商业语义（API鉴权、用户定价模型分流、统计上报记账）。
+底层繁重且易错的串流与并发失败重试等内核机制交由不包含任何存储业务逻辑的 `unigateway-core` 库承担，而 ParaRouter Gateway 作为包壳层 (Shell) 将专注负责它特有的商业语义（API鉴权、用户定价模型分流、统计上报记账）。
 
 ## 实施成果与闭环阶段 (Implementation Phases)
 

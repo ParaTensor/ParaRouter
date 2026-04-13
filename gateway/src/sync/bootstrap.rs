@@ -3,10 +3,10 @@ use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{error, info};
 
-use crate::runtime::OpenHubRuntime;
+use crate::runtime::ParaRouterRuntime;
 use crate::sync::pools::load_all_pools;
 
-pub async fn start_background_syncer(runtime: Arc<OpenHubRuntime>) {
+pub async fn start_background_syncer(runtime: Arc<ParaRouterRuntime>) {
     info!("Starting ProviderPool background snapshot synchronizer...");
 
     // Initial sync

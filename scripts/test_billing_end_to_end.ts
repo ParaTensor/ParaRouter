@@ -5,7 +5,7 @@ import { Pool } from 'pg';
 const HUB_URL = process.env.HUB_URL || 'http://localhost:3322';
 const GATEWAY_URL = process.env.GATEWAY_URL || 'http://localhost:8000';
 // Database connection to inject a clean user directly for testing
-const pool = new Pool({ connectionString: 'postgresql://localhost:5432/openhub' });
+const pool = new Pool({ connectionString: 'postgresql://localhost:5432/pararouter' });
 
 async function runTest() {
   console.log('🌟 开始端到端计费流测试 🌟\n');

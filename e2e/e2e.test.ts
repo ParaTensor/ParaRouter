@@ -97,12 +97,12 @@ async function start() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         name: 'E2E Test Key',
-        key: 'sk-openhub-e2e',
+        key: 'sk-pararouter-e2e',
         uid: 'local-admin' // we bind it to local-admin for simplicity
       })
     });
     if (!keyRes.ok) throw new Error(`Key creation failed: ${await keyRes.text()}`);
-    clientKey = 'sk-openhub-e2e';
+    clientKey = 'sk-pararouter-e2e';
     console.log('  -> Client Key OK');
 
     console.log('4b. Recharge Balance ...');

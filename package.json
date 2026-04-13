@@ -1,5 +1,5 @@
 {
-  "name": "openhub",
+  "name": "pararouter",
   "private": true,
   "version": "1.0.5",
   "type": "module",
@@ -9,9 +9,9 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev -w @openhub/hub",
-    "build": "npm run build -w @openhub/web",
-    "preview": "npm run preview -w @openhub/web",
+    "dev": "npm run dev -w @pararouter/hub",
+    "build": "npm run build -w @pararouter/web",
+    "preview": "npm run preview -w @pararouter/web",
     "clean": "rm -rf dist",
     "lint": "npm run lint --workspaces",
     "test:e2e": "npx tsx e2e/e2e.test.ts"

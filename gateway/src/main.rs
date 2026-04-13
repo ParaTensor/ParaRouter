@@ -1,7 +1,7 @@
 use anyhow::Result;
 use gateway::api::api_router;
 use gateway::db::try_database_with_url;
-use gateway::runtime::OpenHubRuntime;
+use gateway::runtime::ParaRouterRuntime;
 use std::sync::Arc;
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -19,7 +19,7 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    info!("Starting OpenHub Gateway (powered by UniGateway v1.0.0)");
+    info!("Starting ParaRouter Gateway (powered by UniGateway v1.0.0)");
 
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let db_pool = match try_database_with_url(Some(&database_url)).await {
@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
         registry.register(driver);
     }
 
-    let hooks = Arc::new(gateway::usage::hooks::OpenHubHooks {
+    let hooks = Arc::new(gateway::usage::hooks::ParaRouterHooks {
         db: db_pool.clone(),
     });
 
@@ -47,7 +47,7 @@ async fn main() -> Result<()> {
         .with_hooks(hooks)
         .build();
 
-    let runtime = Arc::new(OpenHubRuntime {
+    let runtime = Arc::new(ParaRouterRuntime {
         db: db_pool.clone(),
         engine,
         openai_base_url: "".to_string(),
@@ -64,7 +64,7 @@ async fn main() -> Result<()> {
     let app = api_router().with_state(runtime);
 
     let bind_addr = "0.0.0.0:8000";
-    info!("OpenHub Gateway listening on http://{}", bind_addr);
+    info!("ParaRouter Gateway listening on http://{}", bind_addr);
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
     axum::serve(listener, app).await?;
 

@@ -11,7 +11,7 @@ use unigateway_runtime::host::RuntimeContext;
 
 use crate::auth::keys::AuthenticatedUser;
 use crate::routing::resolve::resolve_model_target;
-use crate::runtime::OpenHubRuntime;
+use crate::runtime::ParaRouterRuntime;
 use crate::translators::openai::{
     into_core_chat_request, into_core_embeddings_request, PermissiveChatRequest,
     PermissiveEmbeddingsRequest,
@@ -19,7 +19,7 @@ use crate::translators::openai::{
 
 pub async fn chat_completions(
     auth: AuthenticatedUser,
-    State(runtime): State<Arc<OpenHubRuntime>>,
+    State(runtime): State<Arc<ParaRouterRuntime>>,
     Json(permissive_request): Json<PermissiveChatRequest>,
 ) -> Response {
     // Stage 1: Protocol Translation
@@ -74,7 +74,7 @@ pub async fn chat_completions(
 
 pub async fn embeddings(
     auth: AuthenticatedUser,
-    State(runtime): State<Arc<OpenHubRuntime>>,
+    State(runtime): State<Arc<ParaRouterRuntime>>,
     Json(permissive_request): Json<PermissiveEmbeddingsRequest>,
 ) -> Response {
     let mut request = match into_core_embeddings_request(permissive_request) {

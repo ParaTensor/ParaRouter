@@ -9,7 +9,7 @@ use unigateway_runtime::host::{
     RuntimePoolHost, RuntimeRoutingHost,
 };
 
-pub struct OpenHubRuntime {
+pub struct ParaRouterRuntime {
     pub db: Pool<Postgres>,
     pub engine: UniGatewayEngine,
     pub openai_base_url: String,
@@ -20,7 +20,7 @@ pub struct OpenHubRuntime {
     pub anthropic_model: String,
 }
 
-impl RuntimeConfigHost for OpenHubRuntime {
+impl RuntimeConfigHost for ParaRouterRuntime {
     fn runtime_config(&self) -> RuntimeConfig<'_> {
         RuntimeConfig {
             openai_base_url: &self.openai_base_url,
@@ -33,13 +33,13 @@ impl RuntimeConfigHost for OpenHubRuntime {
     }
 }
 
-impl RuntimeEngineHost for OpenHubRuntime {
+impl RuntimeEngineHost for ParaRouterRuntime {
     fn core_engine(&self) -> &UniGatewayEngine {
         &self.engine
     }
 }
 
-impl RuntimePoolHost for OpenHubRuntime {
+impl RuntimePoolHost for ParaRouterRuntime {
     fn pool_for_service<'a>(
         &'a self,
         service_id: &'a str,
@@ -50,7 +50,7 @@ impl RuntimePoolHost for OpenHubRuntime {
     }
 }
 
-impl RuntimeRoutingHost for OpenHubRuntime {
+impl RuntimeRoutingHost for ParaRouterRuntime {
     fn resolve_providers<'a>(
         &'a self,
         _service_id: &'a str,
@@ -58,7 +58,7 @@ impl RuntimeRoutingHost for OpenHubRuntime {
         _hint: Option<&'a str>,
     ) -> RuntimeFuture<'a, Result<Vec<ResolvedProvider>>> {
         Box::pin(async move {
-            // For now, OpenHub routing directly targets the pool.
+            // For now, ParaRouter routing directly targets the pool.
             // When building model_pricings mapped proxying later, this is where we return the mapped upstream models.
             Ok(vec![])
         })

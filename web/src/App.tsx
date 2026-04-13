@@ -25,8 +25,8 @@ export default function App() {
 
   React.useEffect(() => {
     const onAuthChange = () => setAuthVersion((v) => v + 1);
-    window.addEventListener('openhub-auth-changed', onAuthChange);
-    return () => window.removeEventListener('openhub-auth-changed', onAuthChange);
+    window.addEventListener('pararouter-auth-changed', onAuthChange);
+    return () => window.removeEventListener('pararouter-auth-changed', onAuthChange);
   }, []);
 
   const authed = isAuthenticated();

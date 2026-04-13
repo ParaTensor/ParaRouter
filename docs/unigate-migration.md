@@ -1,14 +1,14 @@
-# OpenHub Gateway Migration Plan
+# ParaRouter Gateway Migration Plan
 
 Status: Draft
 
 Date: 2026-04-07
 
-Scope: OpenHub Gateway migration onto `unigateway-core` and `unigateway-runtime`
+Scope: ParaRouter Gateway migration onto `unigateway-core` and `unigateway-runtime`
 
 ## 1. Purpose
 
-This document defines a practical migration plan for moving OpenHub Gateway onto the `unigateway-core` and `unigateway-runtime` stack without losing OpenHub's product semantics.
+This document defines a practical migration plan for moving ParaRouter Gateway onto the `unigateway-core` and `unigateway-runtime` stack without losing ParaRouter's product semantics.
 
 The goal is not to restore the old gateway engine. The goal is to keep the new thin-shell architecture and progressively rebuild the business layers that a real gateway still needs:
 
@@ -20,16 +20,16 @@ The goal is not to restore the old gateway engine. The goal is to keep the new t
 
 This plan assumes the current rewrite has already proven one important point:
 
-**OpenHub can execute requests through `unigateway-core`, but the current prototype is too thin to be production-credible.**
+**ParaRouter can execute requests through `unigateway-core`, but the current prototype is too thin to be production-credible.**
 
 ## 2. Current Assessment
 
-The current OpenHub rewrite is best understood as a technical spike, not a merge-ready gateway.
+The current ParaRouter rewrite is best understood as a technical spike, not a merge-ready gateway.
 
 ### 2.1 What the rewrite got right
 
 - It removed duplicated execution logic that overlaps with `unigateway-core`.
-- It proved that OpenHub can host `UniGatewayEngine` and built-in drivers.
+- It proved that ParaRouter can host `UniGatewayEngine` and built-in drivers.
 - It moved the system toward a cleaner layered structure: HTTP shell -> runtime host -> core engine.
 
 ### 2.2 What the rewrite broke
@@ -38,14 +38,14 @@ The current OpenHub rewrite is best understood as a technical spike, not a merge
 - It replaced real routing semantics with a hard-coded `default-service`.
 - It assumed `RuntimePoolHost` provided caching semantics that it does not provide.
 - It mapped unsupported concepts such as endpoint weights into metadata that the core engine does not consume.
-- It removed OpenHub-specific control-plane behavior without replacing it.
+- It removed ParaRouter-specific control-plane behavior without replacing it.
 - It reduced compatibility surface too aggressively.
 
 ### 2.3 Correct framing
 
 The problem is not that the new architecture is wrong.
 
-The problem is that OpenHub-specific gateway concerns were deleted faster than they were reattached to the new architecture.
+The problem is that ParaRouter-specific gateway concerns were deleted faster than they were reattached to the new architecture.
 
 The migration target should therefore be:
 
@@ -57,13 +57,13 @@ The migration should follow five rules.
 
 ### 3.1 Keep the new engine stack
 
-Do not restore the old OpenHub execution engine, adapter stack, or pool manager.
+Do not restore the old ParaRouter execution engine, adapter stack, or pool manager.
 
 `unigateway-core` should remain the only execution engine.
 
 ### 3.2 Restore product semantics outside the engine
 
-OpenHub-specific concerns must live in the gateway shell and host layer:
+ParaRouter-specific concerns must live in the gateway shell and host layer:
 
 - request sanitization
 - auth and key lookup
@@ -79,22 +79,22 @@ Database state should be synchronized into in-memory `ProviderPool` snapshots an
 
 ### 3.4 Do not invent core capabilities that do not exist
 
-If OpenHub requires weighted routing, cache invalidation semantics, or richer scheduling, that requirement must be implemented explicitly.
+If ParaRouter requires weighted routing, cache invalidation semantics, or richer scheduling, that requirement must be implemented explicitly.
 
 Do not treat metadata fields as if they change engine behavior.
 
 ### 3.5 Preserve external compatibility where it matters
 
-OpenHub is still a gateway product. It must keep tolerant HTTP behavior and the compatibility endpoints that real clients depend on.
+ParaRouter is still a gateway product. It must keep tolerant HTTP behavior and the compatibility endpoints that real clients depend on.
 
 ## 4. Target End State
 
-At the end of this migration, the OpenHub request path should look like this:
+At the end of this migration, the ParaRouter request path should look like this:
 
 ```text
 HTTP Request
   -> permissive HTTP payload parser
-  -> OpenHub auth and policy middleware
+  -> ParaRouter auth and policy middleware
   -> model / pricing / provider-account resolution
   -> execution target selection
   -> UniGatewayEngine proxy_chat / proxy_responses / proxy_embeddings
@@ -105,7 +105,7 @@ HTTP Request
 The key distinction is:
 
 - `unigateway-core` owns execution
-- OpenHub owns control-plane semantics
+- ParaRouter owns control-plane semantics
 - synchronization bridges database state into core pools
 
 ## 5. Required Closures
@@ -114,7 +114,7 @@ The migration should be organized around five closures that must all be complete
 
 ### 5.1 Closure A: Translator Layer
 
-OpenHub must not deserialize external HTTP payloads directly into `ProxyChatRequest`, `ProxyResponsesRequest`, or `ProxyEmbeddingsRequest`.
+ParaRouter must not deserialize external HTTP payloads directly into `ProxyChatRequest`, `ProxyResponsesRequest`, or `ProxyEmbeddingsRequest`.
 
 Instead, it should introduce permissive request models that can absorb real client variance:
 
@@ -137,12 +137,12 @@ Acceptance criteria:
 
 ### 5.2 Closure B: Auth and Routing Lifecycle
 
-OpenHub must restore its real control-plane flow before a request reaches the engine.
+ParaRouter must restore its real control-plane flow before a request reaches the engine.
 
 The expected lifecycle is:
 
 1. extract bearer or gateway token
-2. validate token against OpenHub user-facing key tables
+2. validate token against ParaRouter user-facing key tables
 3. determine the requested model and protocol
 4. resolve pricing and permission constraints
 5. map request to a concrete provider-account pool or execution plan
@@ -160,7 +160,7 @@ Outputs:
 - request auth middleware or pre-handler context builder
 - user key lookup and validation
 - model access and pricing resolution
-- deterministic mapping from OpenHub business state to `PoolId` / `ExecutionTarget`
+- deterministic mapping from ParaRouter business state to `PoolId` / `ExecutionTarget`
 
 Acceptance criteria:
 
@@ -189,7 +189,7 @@ Recommended mechanism:
 
 Outputs:
 
-- snapshot builder from OpenHub tables to `ProviderPool`
+- snapshot builder from ParaRouter tables to `ProviderPool`
 - sync coordinator
 - pool invalidation and replacement logic
 - clear mapping rules for account status and key status
@@ -202,7 +202,7 @@ Acceptance criteria:
 
 ### 5.4 Closure D: Usage Tracking and Hooks
 
-Once the engine path is stable, OpenHub should attach a hook implementation to capture execution reports.
+Once the engine path is stable, ParaRouter should attach a hook implementation to capture execution reports.
 
 Hook responsibilities may include:
 
@@ -215,9 +215,9 @@ This closure must remain post-execution only. It should not be used to replace a
 
 Outputs:
 
-- `GatewayHooks` implementation for OpenHub
+- `GatewayHooks` implementation for ParaRouter
 - async persistence or queueing strategy for request reports
-- mapping from `RequestReport` and `TokenUsage` into OpenHub activity tables
+- mapping from `RequestReport` and `TokenUsage` into ParaRouter activity tables
 
 Acceptance criteria:
 
@@ -226,7 +226,7 @@ Acceptance criteria:
 
 ### 5.5 Closure E: Compatibility Surface Recovery
 
-The rewrite should restore the compatibility endpoints that matter to OpenHub users.
+The rewrite should restore the compatibility endpoints that matter to ParaRouter users.
 
 Minimum recovery set:
 
@@ -242,8 +242,8 @@ Optional recovery set, depending on real client demand:
 
 Acceptance criteria:
 
-- the gateway exposes the minimal compatibility surface required by current OpenHub clients
-- model listing reflects real OpenHub-visible models, not placeholder defaults
+- the gateway exposes the minimal compatibility surface required by current ParaRouter clients
+- model listing reflects real ParaRouter-visible models, not placeholder defaults
 
 ## 6. Three-Phase Execution Plan
 
@@ -272,7 +272,7 @@ Non-goals:
 Exit criteria:
 
 - a real OpenAI client can send a request through the gateway
-- the request is authenticated and mapped using OpenHub business state
+- the request is authenticated and mapped using ParaRouter business state
 - no runtime SQL references nonexistent columns or fields
 
 ## Phase 2: Move State Out of the Hot Path
@@ -297,7 +297,7 @@ Exit criteria:
 
 - request handling does not construct pools from database reads
 - sync and refresh behavior is testable and deterministic
-- engine state reflects OpenHub provider-account status changes
+- engine state reflects ParaRouter provider-account status changes
 
 ## Phase 3: Restore Product Completeness
 
@@ -321,7 +321,7 @@ Exit criteria:
 
 ## 7. Recommended Module Shape
 
-The OpenHub gateway should converge toward a structure like this:
+The ParaRouter gateway should converge toward a structure like this:
 
 ```text
 gateway/src/
@@ -386,7 +386,7 @@ The rewrite should not be considered merge-ready until the following statements 
 - Real database schema is used without guessed columns.
 - Pool state is synchronized into engine memory instead of read per request.
 - Request activity and token usage are persisted from engine reports.
-- `/v1/models` is restored and reflects real OpenHub-visible data.
+- `/v1/models` is restored and reflects real ParaRouter-visible data.
 - Current client-critical compatibility routes are available.
 - The codebase no longer contains placeholder routing identifiers such as `default-service`.
 
@@ -396,7 +396,7 @@ The right migration strategy is:
 
 **keep the new clean shell, restore the missing business layers, and do not resurrect the old execution stack.**
 
-OpenHub should move from:
+ParaRouter should move from:
 
 - heavy but complete
 
@@ -408,4 +408,4 @@ and finally to:
 
 - thin and complete
 
-That is the correct path to a mergeable OpenHub gateway on top of `unigateway-core`.
+That is the correct path to a mergeable ParaRouter gateway on top of `unigateway-core`.

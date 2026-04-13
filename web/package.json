@@ -1,5 +1,5 @@
 {
-  "name": "@openhub/web",
+  "name": "@pararouter/web",
   "private": true,
   "version": "1.0.5",
   "type": "module",
@@ -12,7 +12,7 @@
   "dependencies": {
     "@google/genai": "^1.29.0",
     "@headlessui/react": "^2.2.9",
-    "@openhub/shared": "*",
+    "@pararouter/shared": "*",
     "clsx": "^2.1.1",
     "i18next": "^26.0.3",
     "i18next-browser-languagedetector": "^8.2.1",

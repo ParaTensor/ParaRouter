@@ -1,6 +1,6 @@
-# OpenHub Table UI Standards
+# ParaRouter Table UI Standards
 
-To maintain consistency across the OpenHub web application, all data tables must follow one of the two standardized UI formats.
+To maintain consistency across the ParaRouter web application, all data tables must follow one of the two standardized UI formats.
 
 ## Type 1: Internal Operation Output 
 **Use Case:** Tables meant for system administrators or users who need to process dense, operational data. These tables prioritize compact spacing, raw information density, and clear horizontal dividers to optimize scanning.

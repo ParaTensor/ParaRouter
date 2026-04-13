@@ -51,7 +51,7 @@ const client = new OpenAI({
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-100 text-zinc-900 text-[10px] font-bold uppercase tracking-widest border border-zinc-200">
           <Book size={12} />
           {t('docs.documentation')}</div>
-        <h1 className="text-5xl font-black tracking-tight text-zinc-900">{t('docs.build_with_openhub')}</h1>
+        <h1 className="text-5xl font-black tracking-tight text-zinc-900">{t('docs.build_with_pararouter')}</h1>
         <p className="text-xl text-zinc-500 max-w-2xl leading-relaxed">
           {t('docs.the_unified_control_plane_for_')}</p>
       </div>

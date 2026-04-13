@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../db';
 import { requireRole } from '../middleware/auth';
-import { ModelPayload } from '@openhub/shared';
+import { ModelPayload } from '@pararouter/shared';
 import {
   parsePrice,
   parseContextLength,

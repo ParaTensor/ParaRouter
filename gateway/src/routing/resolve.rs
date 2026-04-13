@@ -1,13 +1,13 @@
 use anyhow::{anyhow, Result};
 use std::sync::Arc;
 
-use crate::runtime::OpenHubRuntime;
+use crate::runtime::ParaRouterRuntime;
 use unigateway_core::ExecutionTarget;
 
 /// Resolves a requested model name to one or more `provider_account_id`s,
 /// picking the best active upstream based on `model_provider_pricings`.
 pub async fn resolve_model_target(
-    state: &Arc<OpenHubRuntime>,
+    state: &Arc<ParaRouterRuntime>,
     requested_model: &str,
 ) -> Result<ExecutionTarget> {
     let pool = &state.db;

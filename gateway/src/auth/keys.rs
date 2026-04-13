@@ -8,9 +8,9 @@ use axum::{
 use serde_json::json;
 use std::sync::Arc;
 
-use crate::runtime::OpenHubRuntime;
+use crate::runtime::ParaRouterRuntime;
 
-/// Represents an authenticated OpenHub principal via user_api_keys
+/// Represents an authenticated ParaRouter principal via user_api_keys
 #[derive(Debug, Clone)]
 pub struct AuthenticatedUser {
     pub key_id: String,
@@ -20,12 +20,12 @@ pub struct AuthenticatedUser {
 }
 
 #[axum::async_trait]
-impl FromRequestParts<Arc<OpenHubRuntime>> for AuthenticatedUser {
+impl FromRequestParts<Arc<ParaRouterRuntime>> for AuthenticatedUser {
     type Rejection = Response;
 
     async fn from_request_parts(
         parts: &mut Parts,
-        state: &Arc<OpenHubRuntime>,
+        state: &Arc<ParaRouterRuntime>,
     ) -> std::result::Result<Self, Self::Rejection> {
         let auth_header = parts
             .headers
@@ -59,7 +59,7 @@ impl FromRequestParts<Arc<OpenHubRuntime>> for AuthenticatedUser {
 }
 
 async fn lookup_user_api_key(
-    state: &Arc<OpenHubRuntime>,
+    state: &Arc<ParaRouterRuntime>,
     token: &str,
 ) -> Result<Option<AuthenticatedUser>> {
     #[derive(sqlx::FromRow)]
@@ -72,7 +72,7 @@ async fn lookup_user_api_key(
 
     let pool = &state.db;
 
-    // In OpenHub schema, `user_api_keys` holds the gateway keys
+    // In ParaRouter schema, `user_api_keys` holds the gateway keys
     let row = sqlx::query_as::<_, UserKeyRow>(
         r#"
         SELECT k.id, k.uid, k.name, u.balance

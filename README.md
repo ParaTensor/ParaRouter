@@ -1,9 +1,9 @@
-# OpenHub Unified Workspace
+# ParaRouter Unified Workspace
 
 ## Structure
-- `gateway/`: OpenHub Gateway (Data Plane, Rust)
-- `hub/`: OpenHub Hub (Control Plane, Node.js BFF)
-- `web/`: OpenHub Console (Frontend UI, React/Vite)
+- `gateway/`: ParaRouter Gateway (Data Plane, Rust)
+- `hub/`: ParaRouter Hub (Control Plane, Node.js BFF)
+- `web/`: ParaRouter Console (Frontend UI, React/Vite)
 - `packages/`: Shared libraries and types across workspaces
 
 ## Quick Start

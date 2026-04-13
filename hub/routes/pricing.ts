@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../db';
 import { mapPricingRow } from '../utils';
-import { PricingDraftUpsertRequest } from '@openhub/shared';
+import { PricingDraftUpsertRequest } from '@pararouter/shared';
 import { requireRole } from '../middleware/auth';
 
 const router = Router();

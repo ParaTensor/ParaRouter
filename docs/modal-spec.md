@@ -1,4 +1,4 @@
-# OpenHub Modal Visual Specification
+# ParaRouter Modal Visual Specification
 
 All modal dialog windows across the application must share a unified visual language to ensure a consistent and high-quality user experience. The reference implementation for this design standard is the `EditPriceModal` (Configure New Price).
 

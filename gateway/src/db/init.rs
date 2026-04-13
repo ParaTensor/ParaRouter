@@ -2,7 +2,7 @@ use crate::db::pool::DatabasePool;
 use anyhow::Result;
 
 pub async fn try_database_with_url(url: Option<&str>) -> Result<DatabasePool> {
-    let url = url.unwrap_or("postgresql://localhost:5432/openhub");
+    let url = url.unwrap_or("postgresql://localhost:5432/pararouter");
     if !url.starts_with("postgres://") && !url.starts_with("postgresql://") {
         anyhow::bail!("DATABASE_URL must be a postgres/postgresql URL");
     }

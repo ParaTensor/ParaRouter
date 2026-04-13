@@ -1,6 +1,6 @@
-# OpenHub UI & UX Design Guidelines
+# ParaRouter UI & UX Design Guidelines
 
-To ensure a stable, professional, and high-quality user experience across the OpenHub application, all developers must adhere to the following Universal UI & UX Design Principles. These guidelines are derived from our core philosophy: **Restrained, Unified, and Intuitive.**
+To ensure a stable, professional, and high-quality user experience across the ParaRouter application, all developers must adhere to the following Universal UI & UX Design Principles. These guidelines are derived from our core philosophy: **Restrained, Unified, and Intuitive.**
 
 ## 1. Structural Stability & Anti-Flickering
 UI fundamentals rely on a steady visual state. Any unexpected jumps, layout shifts, or flickering significantly degrade the professional feel of the product.

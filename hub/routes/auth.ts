@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { randomBytes, randomUUID } from 'crypto';
 import { pool } from '../db';
 import { AuthenticatedRequest } from '../types';
-import { AuthUser } from '@openhub/shared';
+import { AuthUser } from '@pararouter/shared';
 import {
   hashPassword,
   verifyPassword,

@@ -145,7 +145,7 @@ export default function Login() {
         </div>
 
         <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">{t('login.welcome_to_openhub')}</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">{t('login.welcome_to_pararouter')}</h1>
           <p className="text-zinc-500">{mode === 'login' ? t('login.sign_in_to_continue') : t('login.create_your_account_with_email_verification')}</p>
         </div>
 
