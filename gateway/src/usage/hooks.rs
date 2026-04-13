@@ -30,7 +30,9 @@ impl GatewayHooks for ParaRouterHooks {
                 .as_millis() as i64;
                 
             let user_id = report.metadata.get("user_id").cloned().unwrap_or_default();
+            let key_id = report.metadata.get("key_id").cloned().unwrap_or_default();
             let model = report.metadata.get("requested_model").cloned().unwrap_or_else(|| "unknown".to_string());
+            
             let prompt_tokens = report.usage.as_ref().and_then(|u| u.input_tokens).unwrap_or(0) as i32;
             let completion_tokens = report.usage.as_ref().and_then(|u| u.output_tokens).unwrap_or(0) as i32;
             let tokens = report.usage.as_ref().and_then(|u| u.total_tokens).unwrap_or(0) as i32;
@@ -66,6 +68,16 @@ impl GatewayHooks for ParaRouterHooks {
                     use sqlx::Row;
                     let c: f64 = row.try_get("cost_deducted").unwrap_or(0.0);
                     cost = c.to_string();
+                    
+                    if !key_id.is_empty() {
+                        let _ = sqlx::query(
+                            "UPDATE user_api_keys SET usage = '$' || (COALESCE(NULLIF(REPLACE(usage, '$', ''), ''), '0')::numeric + $1::numeric)::text WHERE id = $2"
+                        )
+                        .bind(&cost)
+                        .bind(&key_id)
+                        .execute(&db)
+                        .await;
+                    }
                 }
             }
             

@@ -17,6 +17,10 @@ pub struct AuthenticatedUser {
     pub uid: String,
     pub name: String,
     pub balance: f64,
+    pub user_allowed_models: Option<Vec<String>>,
+    pub key_allowed_models: Option<Vec<String>>,
+    pub budget_limit: Option<f64>,
+    pub key_usage: String,
 }
 
 #[axum::async_trait]
@@ -48,10 +52,17 @@ impl FromRequestParts<Arc<ParaRouterRuntime>> for AuthenticatedUser {
         match user {
             Some(u) => {
                 if u.balance <= 0.0 {
-                    Err(payment_required_response("Insufficient balance. Please recharge your account."))
-                } else {
-                    Ok(u)
+                    return Err(payment_required_response("Insufficient balance. Please recharge your account."));
                 }
+                
+                if let Some(budget) = u.budget_limit {
+                    let current_usage = u.key_usage.replace("$", "").parse::<f64>().unwrap_or(0.0);
+                    if current_usage >= budget {
+                        return Err(payment_required_response("API Key budget limit exceeded."));
+                    }
+                }
+                
+                Ok(u)
             },
             None => Err(unauthorized_response("Invalid API key")),
         }
@@ -68,6 +79,10 @@ async fn lookup_user_api_key(
         uid: String,
         name: String,
         balance: f64,
+        user_allowed_models: Option<sqlx::types::Json<Vec<String>>>,
+        key_allowed_models: Option<sqlx::types::Json<Vec<String>>>,
+        budget_limit: Option<f64>,
+        usage: String,
     }
 
     let pool = &state.db;
@@ -75,7 +90,12 @@ async fn lookup_user_api_key(
     // In ParaRouter schema, `user_api_keys` holds the gateway keys
     let row = sqlx::query_as::<_, UserKeyRow>(
         r#"
-        SELECT k.id, k.uid, k.name, u.balance
+        SELECT 
+            k.id, k.uid, k.name, u.balance,
+            u.allowed_models as user_allowed_models,
+            k.allowed_models as key_allowed_models,
+            k.budget_limit,
+            k.usage
         FROM user_api_keys k
         JOIN users u ON k.uid = u.id
         WHERE k.key = $1
@@ -90,6 +110,10 @@ async fn lookup_user_api_key(
         uid: r.uid,
         name: r.name,
         balance: r.balance,
+        user_allowed_models: r.user_allowed_models.map(|j| j.0),
+        key_allowed_models: r.key_allowed_models.map(|j| j.0),
+        budget_limit: r.budget_limit,
+        key_usage: r.usage,
     }))
 }
 

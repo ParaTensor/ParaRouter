@@ -238,4 +238,69 @@ router.post('/set-admin', async (req: AuthenticatedRequest, res) => {
   res.json({ status: 'admin_role_granted' });
 });
 
+router.post('/admin/create-customer', async (req: AuthenticatedRequest, res) => {
+  const user = req.authUser;
+  if (!user) return res.status(401).json({ error: 'unauthorized' });
+  
+  if (user.role !== 'admin') {
+    return res.status(403).json({ error: 'admin required' });
+  }
+
+  const username = normalizeUsername(req.body?.username || '');
+  let email = normalizeEmail(req.body?.email || '');
+  // Auto-generate a 12-char random password if not provided
+  const password = String(req.body?.password || randomBytes(6).toString('hex'));
+  const balance = Number(req.body?.balance) || 10.0;
+  
+  if (!username) {
+    return res.status(400).json({ error: 'username required' });
+  }
+
+  // If no email provided, create a dummy one for the customer
+  if (!email) {
+    email = `${username}@pararouter.local`;
+  }
+
+  const conflict = await pool.query(
+    'SELECT 1 FROM users WHERE username = $1 OR email = $2 LIMIT 1',
+    [username, email]
+  );
+  
+  if (conflict.rowCount) {
+    return res.status(409).json({ error: 'username or email already exists' });
+  }
+
+  const userId = randomUUID();
+  const now = Date.now();
+  
+  // 1. Create the user
+  await pool.query(
+    `INSERT INTO users (id, username, email, display_name, password_hash, role, status, created_at, updated_at, balance)
+     VALUES ($1, $2, $3, $4, $5, 'user', 'active', $6, $7, $8)`,
+    [userId, username, email, username, hashPassword(password), now, now, balance],
+  );
+
+  // 2. Generate and bind an API Key for this new user
+  const keyId = randomUUID();
+  const apiKey = `sk-${randomBytes(24).toString('hex')}`;
+  
+  await pool.query(
+    `INSERT INTO user_api_keys (id, name, key, uid, created_at, last_used, usage)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [keyId, 'Admin Assigned Key', apiKey, userId, now, 'Never', '$0.00'],
+  );
+
+  res.json({
+    status: 'customer_created',
+    message: 'Customer and API Key created successfully',
+    account: {
+      username,
+      email,
+      password,
+      balance
+    },
+    api_key: apiKey
+  });
+});
+
 export default router;

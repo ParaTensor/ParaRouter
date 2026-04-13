@@ -4,7 +4,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from '../lib/api';
 import PricingHeader from './pricing/PricingHeader';
 import PricingTable from './pricing/PricingTable';
 import ProviderAccountModal from './pricing/ProviderAccountModal';
-import EditPriceModal from './pricing/EditPriceModal';
+import EditPriceModal, { type AppliedRateFields } from './pricing/EditPriceModal';
 import {
   PricingRow, PublishedPricingRow, ProviderKeyRow, PricingTableRow,
   PricingPreview, SortKey, PriceRange
@@ -191,8 +191,20 @@ export default function PricingView() {
     setDrawerOpen(true);
   };
 
-  const saveDraft = async (): Promise<boolean> => {
+  const saveDraft = async (rates?: AppliedRateFields): Promise<boolean> => {
     const mode = 'fixed';
+    const r = rates ?? {
+      inputCost,
+      outputCost,
+      cacheReadCost,
+      cacheWriteCost,
+      reasoningCost,
+      inputPrice,
+      outputPrice,
+      cacheReadPrice,
+      cacheWritePrice,
+      reasoningPrice,
+    };
     const payload: Record<string, unknown> = {
       model: model.trim(),
       provider_model_id: providerModelId ? providerModelId.trim() : null,
@@ -201,7 +213,7 @@ export default function PricingView() {
       currency: 'USD',
       context_length: contextLength ? Number(contextLength) : null,
       latency_ms: latencyMs ? Number(latencyMs) : null,
-      reasoning_price: reasoningPrice ? Number(reasoningPrice) : null,
+      reasoning_price: r.reasoningPrice ? Number(r.reasoningPrice) : null,
       status: 'online',
       provider_key_id: providerKeyId || '',
     };
@@ -214,18 +226,18 @@ export default function PricingView() {
     }
 
     if (mode === 'fixed') {
-      if (!inputPrice || !outputPrice || !inputCost || !outputCost) {
+      if (!r.inputPrice || !r.outputPrice || !r.inputCost || !r.outputCost) {
         return false;
       }
-      payload.input_cost = Number(inputCost);
-      payload.output_cost = Number(outputCost);
-      payload.cache_read_cost = cacheReadCost ? Number(cacheReadCost) : null;
-      payload.cache_write_cost = cacheWriteCost ? Number(cacheWriteCost) : null;
-      payload.reasoning_cost = reasoningCost ? Number(reasoningCost) : null;
-      payload.input_price = Number(inputPrice);
-      payload.output_price = Number(outputPrice);
-      payload.cache_read_price = cacheReadPrice ? Number(cacheReadPrice) : null;
-      payload.cache_write_price = cacheWritePrice ? Number(cacheWritePrice) : null;
+      payload.input_cost = Number(r.inputCost);
+      payload.output_cost = Number(r.outputCost);
+      payload.cache_read_cost = r.cacheReadCost ? Number(r.cacheReadCost) : null;
+      payload.cache_write_cost = r.cacheWriteCost ? Number(r.cacheWriteCost) : null;
+      payload.reasoning_cost = r.reasoningCost ? Number(r.reasoningCost) : null;
+      payload.input_price = Number(r.inputPrice);
+      payload.output_price = Number(r.outputPrice);
+      payload.cache_read_price = r.cacheReadPrice ? Number(r.cacheReadPrice) : null;
+      payload.cache_write_price = r.cacheWritePrice ? Number(r.cacheWritePrice) : null;
     }
 
     setBusy(true);

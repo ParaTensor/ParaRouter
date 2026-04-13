@@ -46,7 +46,7 @@ const client = new OpenAI({
   ];
 
   return (
-    <div className="max-w-5xl space-y-12 pb-20">
+    <div className="w-full space-y-12 pb-20">
       <div className="space-y-4">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-100 text-zinc-900 text-[10px] font-bold uppercase tracking-widest border border-zinc-200">
           <Book size={12} />

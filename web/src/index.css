@@ -11,8 +11,12 @@
 }
 
 @layer base {
+  html {
+    scrollbar-gutter: stable;
+  }
   body {
     @apply bg-white text-zinc-950 antialiased;
+    scrollbar-gutter: stable;
   }
 }
 

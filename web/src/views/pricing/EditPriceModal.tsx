@@ -5,6 +5,61 @@ import { Combobox, ComboboxInput, ComboboxOptions, ComboboxOption, ComboboxButto
 import { ProviderKeyRow, DrawerTab, PricingPreview, PricingRow } from './types';
 import { useTranslation } from "react-i18next";
 
+export type AppliedRateFields = {
+  inputCost: string;
+  outputCost: string;
+  cacheReadCost: string;
+  cacheWriteCost: string;
+  reasoningCost: string;
+  inputPrice: string;
+  outputPrice: string;
+  cacheReadPrice: string;
+  cacheWritePrice: string;
+  reasoningPrice: string;
+};
+
+function resolveGlobalModel(modelId: string, globalModels: any[]) {
+  return globalModels.find(
+    (m) =>
+      m.id === modelId.trim() ||
+      m.name.toLowerCase() === modelId.trim().toLowerCase() ||
+      m.id.split('/').pop() === modelId.trim()
+  );
+}
+
+/** Merge official benchmark × multipliers into current price strings (same rules as applyRates). */
+export function mergeAppliedRates(
+  modelId: string,
+  crate: string,
+  srate: string,
+  globalModels: any[],
+  current: AppliedRateFields
+): AppliedRateFields {
+  const gm = resolveGlobalModel(modelId, globalModels);
+  if (!gm?.pricing) return current;
+  const p = gm.pricing;
+  const parse = (str?: string) => (str ? parseFloat(str.replace(/[^0-9.]/g, '')) : 0);
+  const format = (val: number) => parseFloat(val.toFixed(2)).toString();
+  const next = { ...current };
+  const cmap = parseFloat(crate);
+  if (!isNaN(cmap)) {
+    if (p.prompt) next.inputCost = format(parse(p.prompt) * cmap);
+    if (p.completion) next.outputCost = format(parse(p.completion) * cmap);
+    if (p.cache_read) next.cacheReadCost = format(parse(p.cache_read) * cmap);
+    if (p.cache_write) next.cacheWriteCost = format(parse(p.cache_write) * cmap);
+    if (p.reasoning) next.reasoningCost = format(parse(p.reasoning) * cmap);
+  }
+  const smap = parseFloat(srate);
+  if (!isNaN(smap)) {
+    if (p.prompt) next.inputPrice = format(parse(p.prompt) * smap);
+    if (p.completion) next.outputPrice = format(parse(p.completion) * smap);
+    if (p.cache_read) next.cacheReadPrice = format(parse(p.cache_read) * smap);
+    if (p.cache_write) next.cacheWritePrice = format(parse(p.cache_write) * smap);
+    if (p.reasoning) next.reasoningPrice = format(parse(p.reasoning) * smap);
+  }
+  return next;
+}
+
 interface EditPriceModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -53,7 +108,7 @@ interface EditPriceModalProps {
   providers: string[];
   busy: boolean;
   handlePreview: () => Promise<void>;
-  saveDraft: () => Promise<boolean>;
+  saveDraft: (rates?: AppliedRateFields) => Promise<boolean>;
   handlePublish: () => Promise<boolean>;
   preview: PricingPreview | null;
   draft: PricingRow[];
@@ -153,7 +208,7 @@ export default function EditPriceModal({
     setContextLength, setLatencyMs, setMarkupRate, globalModels
   ]);
 
-  const validateForm = () => {
+  const validateForm = (rates: AppliedRateFields) => {
     if (!model.trim()) {
       setFormError(t('editpricemodal.error_model_required'));
       return false;
@@ -173,7 +228,7 @@ export default function EditPriceModal({
     // Check pricing fields
     const mode = formPriceMode;
     if (mode === 'fixed') {
-      if (!inputPrice || !outputPrice || !inputCost || !outputCost) {
+      if (!rates.inputPrice || !rates.outputPrice || !rates.inputCost || !rates.outputCost) {
         setFormError(t('editpricemodal.error_pricing_fields_required'));
         return false;
       }
@@ -189,8 +244,30 @@ export default function EditPriceModal({
   };
 
   const onPublish = async () => {
-    if (!validateForm()) return;
-    const success = await saveDraft();
+    const merged = mergeAppliedRates(model, costMultiplier, salesMultiplier, globalModels, {
+      inputCost,
+      outputCost,
+      cacheReadCost,
+      cacheWriteCost,
+      reasoningCost,
+      inputPrice,
+      outputPrice,
+      cacheReadPrice,
+      cacheWritePrice,
+      reasoningPrice,
+    });
+    if (!validateForm(merged)) return;
+    setInputCost(merged.inputCost);
+    setOutputCost(merged.outputCost);
+    setCacheReadCost(merged.cacheReadCost);
+    setCacheWriteCost(merged.cacheWriteCost);
+    setReasoningCost(merged.reasoningCost);
+    setInputPrice(merged.inputPrice);
+    setOutputPrice(merged.outputPrice);
+    setCacheReadPrice(merged.cacheReadPrice);
+    setCacheWritePrice(merged.cacheWritePrice);
+    setReasoningPrice(merged.reasoningPrice);
+    const success = await saveDraft(merged);
     if (!success) {
       setFormError(t('editpricemodal.error_save_failed_before_publish'));
       return;
@@ -202,31 +279,31 @@ export default function EditPriceModal({
   };
 
   const applyRates = (modelId: string, crate: string, srate: string) => {
-    const gm = globalModels.find(m => m.id === modelId.trim() || m.name.toLowerCase() === modelId.trim().toLowerCase() || m.id.split('/').pop() === modelId.trim());
-    if (!gm || !gm.pricing) return;
-    const p = gm.pricing;
-    const parse = (str?: string) => str ? parseFloat(str.replace(/[^0-9.]/g, '')) : 0;
-    const format = (val: number) => parseFloat(val.toFixed(2)).toString();
-    
-    const cmap = parseFloat(crate);
-    if (!isNaN(cmap)) {
-      if (p.prompt) setInputCost(format(parse(p.prompt) * cmap));
-      if (p.completion) setOutputCost(format(parse(p.completion) * cmap));
-      if (p.cache_read) setCacheReadCost(format(parse(p.cache_read) * cmap));
-      if (p.cache_write) setCacheWriteCost(format(parse(p.cache_write) * cmap));
-      if (p.reasoning) setReasoningCost(format(parse(p.reasoning) * cmap));
-    }
-    const smap = parseFloat(srate);
-    if (!isNaN(smap)) {
-      if (p.prompt) setInputPrice(format(parse(p.prompt) * smap));
-      if (p.completion) setOutputPrice(format(parse(p.completion) * smap));
-      if (p.cache_read) setCacheReadPrice(format(parse(p.cache_read) * smap));
-      if (p.cache_write) setCacheWritePrice(format(parse(p.cache_write) * smap));
-      if (p.reasoning) setReasoningPrice(format(parse(p.reasoning) * smap));
-    }
+    const next = mergeAppliedRates(modelId, crate, srate, globalModels, {
+      inputCost,
+      outputCost,
+      cacheReadCost,
+      cacheWriteCost,
+      reasoningCost,
+      inputPrice,
+      outputPrice,
+      cacheReadPrice,
+      cacheWritePrice,
+      reasoningPrice,
+    });
+    setInputCost(next.inputCost);
+    setOutputCost(next.outputCost);
+    setCacheReadCost(next.cacheReadCost);
+    setCacheWriteCost(next.cacheWriteCost);
+    setReasoningCost(next.reasoningCost);
+    setInputPrice(next.inputPrice);
+    setOutputPrice(next.outputPrice);
+    setCacheReadPrice(next.cacheReadPrice);
+    setCacheWritePrice(next.cacheWritePrice);
+    setReasoningPrice(next.reasoningPrice);
   };
 
-  const hasOfficialPricing = Boolean(globalModels.find(m => m.id === model.trim() || m.name.toLowerCase() === model.trim().toLowerCase() || m.id.split('/').pop() === model.trim())?.pricing);
+  const hasOfficialPricing = Boolean(resolveGlobalModel(model, globalModels)?.pricing);
 
   // Using Headless UI Dialog for scroll lock management now
   if (!isOpen) return null;

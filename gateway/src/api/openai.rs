@@ -30,10 +30,31 @@ pub async fn chat_completions(
         }
     };
 
+    // Enforce ACL
+    if let Some(user_models) = &auth.user_allowed_models {
+        if !user_models.contains(&request.model) {
+            return (
+                axum::http::StatusCode::FORBIDDEN,
+                axum::Json(serde_json::json!({ "error": "Model not allowed by user policy" }))
+            ).into_response();
+        }
+    }
+    if let Some(key_models) = &auth.key_allowed_models {
+        if !key_models.contains(&request.model) {
+            return (
+                axum::http::StatusCode::FORBIDDEN,
+                axum::Json(serde_json::json!({ "error": "Model not allowed by API key policy" }))
+            ).into_response();
+        }
+    }
+
     // Annotate metadata securely from Auth layer
-    request.metadata.insert("user_id".to_string(), auth.uid);
-    request.metadata.insert("key_id".to_string(), auth.key_id);
+    request.metadata.insert("user_id".to_string(), auth.uid.clone());
+    request.metadata.insert("key_id".to_string(), auth.key_id.clone());
     request.metadata.insert("requested_model".to_string(), request.model.clone());
+    if let Some(budget_limit) = auth.budget_limit {
+        request.metadata.insert("budget_limit".to_string(), budget_limit.to_string());
+    }
 
     // Stage 2: Routing Lifecycle (find ExecutionTarget)
     let target = match resolve_model_target(&runtime, &request.model).await {
@@ -84,9 +105,30 @@ pub async fn embeddings(
         }
     };
 
-    request.metadata.insert("user_id".to_string(), auth.uid);
-    request.metadata.insert("key_id".to_string(), auth.key_id);
+    // Enforce ACL
+    if let Some(user_models) = &auth.user_allowed_models {
+        if !user_models.contains(&request.model) {
+            return (
+                axum::http::StatusCode::FORBIDDEN,
+                axum::Json(serde_json::json!({ "error": "Model not allowed by user policy" }))
+            ).into_response();
+        }
+    }
+    if let Some(key_models) = &auth.key_allowed_models {
+        if !key_models.contains(&request.model) {
+            return (
+                axum::http::StatusCode::FORBIDDEN,
+                axum::Json(serde_json::json!({ "error": "Model not allowed by API key policy" }))
+            ).into_response();
+        }
+    }
+
+    request.metadata.insert("user_id".to_string(), auth.uid.clone());
+    request.metadata.insert("key_id".to_string(), auth.key_id.clone());
     request.metadata.insert("requested_model".to_string(), request.model.clone());
+    if let Some(budget_limit) = auth.budget_limit {
+        request.metadata.insert("budget_limit".to_string(), budget_limit.to_string());
+    }
 
     let target = match resolve_model_target(&runtime, &request.model).await {
         Ok(t) => t,

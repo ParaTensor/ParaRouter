@@ -1,6 +1,6 @@
 [package]
 name = "gateway"
-version = "1.0.6"
+version = "1.0.7"
 default-run = "gateway"
 edition = "2021"
 authors = ["lipicoder@qq.com"]

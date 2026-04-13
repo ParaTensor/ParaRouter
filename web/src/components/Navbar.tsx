@@ -1,5 +1,5 @@
 import React from 'react';
-import {Menu, X, ChevronDown, Key, Settings, LogOut, Activity, LayoutGrid, BarChart3, MessageSquare, BookOpen, Server, BadgeDollarSign, PlugZap, Database, Globe} from 'lucide-react';
+import {Menu, X, ChevronDown, Key, Settings, LogOut, LayoutGrid, BarChart3, MessageSquare, BookOpen, BadgeDollarSign, PlugZap, Database, UsersRound} from 'lucide-react';
 import {cn} from '../lib/utils';
 import {clearAuthSession, localUser} from '../lib/session';
 import {apiPost} from '../lib/api';
@@ -24,18 +24,19 @@ export default function Navbar() {
 
   const navLinks = [
     {id: '/models', labelKey: 'navbar.models', icon: LayoutGrid},
-    {id: '/rankings', labelKey: 'navbar.rankings', icon: BarChart3},
-    {id: '/activity', labelKey: 'navbar.activity', icon: Activity},
+    {id: '/insights', labelKey: 'navbar.insights', icon: BarChart3},
     {id: '/pricing', labelKey: 'navbar.pricing', icon: BadgeDollarSign, adminOnly: true},
     {id: '/providers', labelKey: 'navbar.providers', icon: PlugZap, adminOnly: true},
     {id: '/chat', labelKey: 'navbar.chat', icon: MessageSquare},
     {id: '/docs', labelKey: 'navbar.docs', icon: BookOpen},
-    {id: '/hub', labelKey: 'navbar.hub', icon: Server, adminOnly: true},
   ];
 
   const filteredLinks = [
     ...navLinks.filter((link) => !link.adminOnly || localUser?.role === 'admin'),
-    ...(localUser?.role === 'admin' ? [{id: '/global-models', labelKey: 'navbar.global_models', icon: Database}] : [])
+    ...(localUser?.role === 'admin' ? [
+      {id: '/customers', labelKey: 'navbar.customers', icon: UsersRound},
+      {id: '/global-models', labelKey: 'navbar.global_models', icon: Database},
+    ] : [])
   ];
 
   return (
@@ -113,6 +114,11 @@ export default function Navbar() {
                       className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-zinc-600 hover:text-black hover:bg-gray-50 transition-colors"
                     >
                       <Database size={14} /> {t('navbar.global_models')}</button>
+                    <button
+                      onClick={() => navigate('/customers')}
+                      className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-zinc-600 hover:text-black hover:bg-gray-50 transition-colors"
+                    >
+                      <UsersRound size={14} /> {t('navbar.customers')}</button>
                   </>
                 )}
                 <div className="h-px bg-gray-50 my-1.5" />

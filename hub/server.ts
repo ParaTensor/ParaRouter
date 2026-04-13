@@ -21,6 +21,7 @@ import activityRouter from './routes/activity';
 import billingRouter from './routes/billing';
 import rankingsRouter from './routes/rankings';
 import chatRouter from './routes/chat';
+import customersRouter from './routes/customers';
 
 const PORT = Number(process.env.PORT || 3322);
 
@@ -36,7 +37,7 @@ async function startServer() {
       res.setHeader('Vary', 'Origin');
     }
     res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
     if (req.method === 'OPTIONS') {
       return res.status(204).end();
     }
@@ -68,6 +69,7 @@ async function startServer() {
   app.use('/api/billing', billingRouter);
   app.use('/api/rankings', rankingsRouter);
   app.use('/api/chat', chatRouter);
+  app.use('/api/admin/customers', customersRouter);
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

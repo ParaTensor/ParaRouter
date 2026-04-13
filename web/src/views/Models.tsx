@@ -45,12 +45,12 @@ export default function ModelsView() {
 
   return (
     <div className="space-y-10">
-      <div className="text-center max-w-2xl mx-auto pt-4 pb-4">
-        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-zinc-900 mb-4">{t('models.the_unified_interface_for_llms')}</h1>
+      <div className="max-w-3xl pt-4 pb-4 space-y-3">
+        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-900">{t('models.the_unified_interface_for_llms')}</h1>
         <p className="text-lg text-zinc-500 font-medium">{t('models.access_any_ai_model_via_a_sing')}</p>
       </div>
 
-      <div className="max-w-3xl mx-auto sticky top-[72px] z-30 bg-white/80 backdrop-blur-md py-2">
+      <div className="max-w-3xl sticky top-[72px] z-30 bg-white/80 backdrop-blur-md py-2">
         <div className="relative group">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-black transition-colors" size={20} />
           <input

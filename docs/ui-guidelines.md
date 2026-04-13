@@ -6,7 +6,8 @@ To ensure a stable, professional, and high-quality user experience across the Pa
 UI fundamentals rely on a steady visual state. Any unexpected jumps, layout shifts, or flickering significantly degrade the professional feel of the product.
 
 - **Prevent Layout Shifts**: Floating layers (Modals, Dropdowns, Drawers) must have predictable heights or fixed minimum heights. This prevents the panel from expanding and contracting erratically during async data loading or form validation.
-- **No Direct DOM Mutations**: Do not manually manipulate low-level DOM styles (e.g., `document.body.style.overflow`) to manage scroll locks. Always utilize robust ecosystem libraries (like `@headlessui/react` `Dialog`) that handle accessibility (a11y) and focus/scroll trapping automatically.
+- **No Direct DOM Mutations & Interaction**: Do not manually manipulate low-level DOM styles (e.g., `document.body.style.overflow`) to manage scroll locks. Always utilize robust ecosystem libraries (like `@headlessui/react` `Dialog`) that handle accessibility (a11y) and focus/scroll trapping automatically. All modals MUST automatically close when the user clicks the backdrop (outside the panel) or presses `Escape`.
+- **Form Input Consistency**: Modal form fields elements should consistently use the `px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all` tailwind style pattern. Primary actions within modals should use `bg-blue-600` or `bg-black` styling as appropriate, matching sibling pages. Form labels should use `text-xs font-bold uppercase tracking-widest text-zinc-400`.
 - **Modal-First Editing**: Avoid complex "inline editing" within tables or lists if the task involves more than three fields or intricate validation logic. Use side drawers or modals to isolate the interactive context and keep the main layout undisturbed.
 
 ## 2. Workflow Minimization & Visual Denoising
