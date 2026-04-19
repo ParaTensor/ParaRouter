@@ -4,6 +4,7 @@ use anyhow::Result;
 use gateway::api::api_router;
 use gateway::db::try_database_with_url;
 use gateway::runtime::ParaRouterRuntime;
+use tower_http::cors::{Any, CorsLayer};
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use unigateway_sdk::core::UniGatewayEngine;
@@ -53,7 +54,12 @@ async fn main() -> Result<()> {
     // Start Phase 2: Active Synchronization
     gateway::sync::bootstrap::start_background_syncer(runtime.clone()).await;
 
-    let app = api_router().with_state(runtime);
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
+    let app = api_router().layer(cors).with_state(runtime);
 
     let bind_addr = "0.0.0.0:8000";
     info!("ParaRouter Gateway listening on http://{}", bind_addr);
