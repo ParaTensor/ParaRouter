@@ -2,8 +2,8 @@ use futures_util::future::BoxFuture;
 use sqlx::{Pool, Postgres};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use unigateway_core::hooks::{AttemptFinishedEvent, AttemptStartedEvent, GatewayHooks};
-use unigateway_core::response::RequestReport;
+use unigateway_sdk::core::hooks::{AttemptFinishedEvent, AttemptStartedEvent, GatewayHooks};
+use unigateway_sdk::core::response::RequestReport;
 
 pub struct ParaRouterHooks {
     pub db: Pool<Postgres>,

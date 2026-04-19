@@ -1,11 +1,14 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use gateway::api::api_router;
 use gateway::db::try_database_with_url;
 use gateway::runtime::ParaRouterRuntime;
-use std::sync::Arc;
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use unigateway_core::UniGatewayEngine;
+use unigateway_sdk::core::UniGatewayEngine;
+use unigateway_sdk::core::registry::InMemoryDriverRegistry;
+use unigateway_sdk::core::transport::ReqwestHttpTransport;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -19,7 +22,7 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    info!("Starting ParaRouter Gateway (powered by UniGateway v1.0.0)");
+    info!("Starting ParaRouter Gateway (powered by UniGateway v1.5.0)");
 
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let db_pool = match try_database_with_url(Some(&database_url)).await {
@@ -30,11 +33,9 @@ async fn main() -> Result<()> {
         }
     };
 
-    let transport = Arc::new(unigateway_core::transport::ReqwestHttpTransport::new(
-        reqwest::Client::new(),
-    ));
-    let registry = Arc::new(unigateway_core::registry::InMemoryDriverRegistry::new());
-    for driver in unigateway_core::protocol::builtin_drivers(transport) {
+    let transport = Arc::new(ReqwestHttpTransport::new(reqwest::Client::new()));
+    let registry = Arc::new(InMemoryDriverRegistry::new());
+    for driver in unigateway_sdk::core::protocol::builtin_drivers(transport) {
         registry.register(driver);
     }
 
@@ -45,18 +46,9 @@ async fn main() -> Result<()> {
     let engine = UniGatewayEngine::builder()
         .with_driver_registry(registry)
         .with_hooks(hooks)
-        .build();
+        .build()?;
 
-    let runtime = Arc::new(ParaRouterRuntime {
-        db: db_pool.clone(),
-        engine,
-        openai_base_url: "".to_string(),
-        openai_api_key: "".to_string(),
-        openai_model: "".to_string(),
-        anthropic_base_url: "".to_string(),
-        anthropic_api_key: "".to_string(),
-        anthropic_model: "".to_string(),
-    });
+    let runtime = Arc::new(ParaRouterRuntime::new(db_pool.clone(), engine));
 
     // Start Phase 2: Active Synchronization
     gateway::sync::bootstrap::start_background_syncer(runtime.clone()).await;

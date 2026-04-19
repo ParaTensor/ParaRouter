@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use std::sync::Arc;
 
 use crate::runtime::ParaRouterRuntime;
-use unigateway_core::ExecutionTarget;
+use unigateway_sdk::core::ExecutionTarget;
 
 /// Resolves a requested model name to a `provider_account_id` (pool id).
 /// Uses the current published pricing version. When `forced_provider_account_id` is set,

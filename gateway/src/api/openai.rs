@@ -1,13 +1,19 @@
+use std::sync::Arc;
+
 use axum::{
     extract::State,
+    http::StatusCode,
     response::{IntoResponse, Response},
     Json,
 };
-use std::sync::Arc;
-use unigateway_core::ExecutionTarget;
+use axum::body::Body;
 
-use unigateway_runtime::core::{try_openai_chat_via_core, try_openai_embeddings_via_core};
-use unigateway_runtime::host::RuntimeContext;
+use unigateway_sdk::core::ExecutionTarget;
+use unigateway_sdk::host::{
+    dispatch_request, HostContext, HostDispatchOutcome, HostDispatchTarget, HostError,
+    HostProtocol, HostRequest,
+};
+use unigateway_sdk::protocol::{ProtocolHttpResponse, ProtocolResponseBody};
 
 use crate::auth::keys::AuthenticatedUser;
 use crate::routing::resolve::resolve_model_target;
@@ -16,6 +22,56 @@ use crate::translators::openai::{
     into_core_chat_request, into_core_embeddings_request, PermissiveChatRequest,
     PermissiveEmbeddingsRequest,
 };
+
+/// Convert a ProtocolHttpResponse into an axum::Response.
+fn into_axum_response(response: ProtocolHttpResponse) -> Response {
+    let (status, body) = response.into_parts();
+    match body {
+        ProtocolResponseBody::Json(value) => {
+            (status, axum::Json(value)).into_response()
+        }
+        ProtocolResponseBody::ServerSentEvents(stream) => {
+            Response::builder()
+                .status(status)
+                .header("content-type", "text/event-stream")
+                .header("cache-control", "no-cache")
+                .body(Body::from_stream(stream))
+                .unwrap_or_else(|e| {
+                    (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
+                })
+        }
+    }
+}
+
+/// Convert HostError into an appropriate HTTP Response.
+fn error_response_for_host_error(err: &HostError) -> Response {
+    let status = match err {
+        HostError::InvalidDispatchRequest { .. } => StatusCode::BAD_REQUEST,
+        HostError::PoolLookup(_) => StatusCode::BAD_GATEWAY,
+        HostError::Targeting(_) => StatusCode::BAD_REQUEST,
+        HostError::CoreInvalidRequest(_) => StatusCode::BAD_REQUEST,
+        HostError::CorePoolNotFound(_) => StatusCode::NOT_FOUND,
+        HostError::CoreEndpointNotFound(_) => StatusCode::NOT_FOUND,
+        HostError::CoreBuild(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        HostError::CoreAllEndpointsSaturated { .. } => StatusCode::SERVICE_UNAVAILABLE,
+        HostError::CoreNoAvailableEndpoint { .. } => StatusCode::SERVICE_UNAVAILABLE,
+        HostError::CoreUpstreamHttp { status, .. } => {
+            StatusCode::from_u16(*status).unwrap_or(StatusCode::BAD_GATEWAY)
+        }
+        HostError::CoreTransport { .. } => StatusCode::BAD_GATEWAY,
+        HostError::CoreStreamAborted { .. } => StatusCode::BAD_GATEWAY,
+        HostError::CoreNotImplemented(_) => StatusCode::NOT_IMPLEMENTED,
+        HostError::CoreAllAttemptsFailed { .. } => StatusCode::BAD_GATEWAY,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    };
+
+    let error_body = serde_json::json!({
+        "error": {
+            "message": err.to_string()
+        }
+    });
+    (status, axum::Json(error_body)).into_response()
+}
 
 pub async fn chat_completions(
     auth: AuthenticatedUser,
@@ -32,7 +88,7 @@ pub async fn chat_completions(
     let mut request = match into_core_chat_request(permissive_request) {
         Ok(r) => r,
         Err(e) => {
-            return (axum::http::StatusCode::BAD_REQUEST, e).into_response();
+            return (StatusCode::BAD_REQUEST, e).into_response();
         }
     };
 
@@ -40,7 +96,7 @@ pub async fn chat_completions(
     if let Some(user_models) = &auth.user_allowed_models {
         if !user_models.contains(&request.model) {
             return (
-                axum::http::StatusCode::FORBIDDEN,
+                StatusCode::FORBIDDEN,
                 axum::Json(serde_json::json!({ "error": "Model not allowed by user policy" }))
             ).into_response();
         }
@@ -48,7 +104,7 @@ pub async fn chat_completions(
     if let Some(key_models) = &auth.key_allowed_models {
         if !key_models.contains(&request.model) {
             return (
-                axum::http::StatusCode::FORBIDDEN,
+                StatusCode::FORBIDDEN,
                 axum::Json(serde_json::json!({ "error": "Model not allowed by API key policy" }))
             ).into_response();
         }
@@ -67,7 +123,7 @@ pub async fn chat_completions(
         Ok(t) => t,
         Err(e) => {
             return (
-                axum::http::StatusCode::NOT_FOUND,
+                StatusCode::NOT_FOUND,
                 format!("Routing failed: {}", e),
             )
                 .into_response();
@@ -78,24 +134,43 @@ pub async fn chat_completions(
         ExecutionTarget::Pool { pool_id } => pool_id.clone(),
         _ => {
             return (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                StatusCode::INTERNAL_SERVER_ERROR,
                 "Unsupported target type",
             )
                 .into_response()
         }
     };
 
-    let ctx = RuntimeContext::from_parts(&*runtime, &*runtime, &*runtime, &*runtime);
-
-    // Stage 3: Execution
-    match try_openai_chat_via_core(&ctx, &service_id, None, request).await {
-        Ok(Some(response)) => response,
-        Ok(None) => (axum::http::StatusCode::NOT_FOUND, "Pool mapping not found").into_response(),
-        Err(err) => (
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            err.to_string(),
-        )
-            .into_response(),
+    // Stage 3: Execution via HostContext and dispatch_request
+    // Note: provider_hint is intentionally NOT passed to dispatch_request here.
+    // The hint (pararouter_provider_account_id) is only used at the routing stage
+    // to select which provider pool to use (resolve_model_target). At the dispatch
+    // stage, hint would be used to filter endpoints within the pool, but ParaRouter's
+    // endpoint modeling does not include account_id in any hint-matchable field.
+    let ctx = HostContext::from_parts(&runtime.engine, &*runtime);
+    match dispatch_request(
+        &ctx,
+        HostDispatchTarget::Service(&service_id),
+        HostProtocol::OpenAiChat,
+        None,
+        HostRequest::Chat(request),
+    )
+    .await
+    {
+        Ok(outcome) => match outcome {
+            HostDispatchOutcome::Response(response) => into_axum_response(response),
+            HostDispatchOutcome::PoolNotFound => (
+                StatusCode::NOT_FOUND,
+                "Pool mapping not found",
+            )
+                .into_response(),
+            _ => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Unexpected dispatch outcome",
+            )
+                .into_response(),
+        },
+        Err(err) => error_response_for_host_error(&err),
     }
 }
 
@@ -113,7 +188,7 @@ pub async fn embeddings(
     let mut request = match into_core_embeddings_request(permissive_request) {
         Ok(r) => r,
         Err(e) => {
-            return (axum::http::StatusCode::BAD_REQUEST, e).into_response();
+            return (StatusCode::BAD_REQUEST, e).into_response();
         }
     };
 
@@ -121,7 +196,7 @@ pub async fn embeddings(
     if let Some(user_models) = &auth.user_allowed_models {
         if !user_models.contains(&request.model) {
             return (
-                axum::http::StatusCode::FORBIDDEN,
+                StatusCode::FORBIDDEN,
                 axum::Json(serde_json::json!({ "error": "Model not allowed by user policy" }))
             ).into_response();
         }
@@ -129,7 +204,7 @@ pub async fn embeddings(
     if let Some(key_models) = &auth.key_allowed_models {
         if !key_models.contains(&request.model) {
             return (
-                axum::http::StatusCode::FORBIDDEN,
+                StatusCode::FORBIDDEN,
                 axum::Json(serde_json::json!({ "error": "Model not allowed by API key policy" }))
             ).into_response();
         }
@@ -146,7 +221,7 @@ pub async fn embeddings(
         Ok(t) => t,
         Err(e) => {
             return (
-                axum::http::StatusCode::NOT_FOUND,
+                StatusCode::NOT_FOUND,
                 format!("Routing failed: {}", e),
             )
                 .into_response();
@@ -157,22 +232,39 @@ pub async fn embeddings(
         ExecutionTarget::Pool { pool_id } => pool_id.clone(),
         _ => {
             return (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                StatusCode::INTERNAL_SERVER_ERROR,
                 "Unsupported target type",
             )
                 .into_response()
         }
     };
 
-    let ctx = RuntimeContext::from_parts(&*runtime, &*runtime, &*runtime, &*runtime);
-
-    match try_openai_embeddings_via_core(&ctx, &service_id, None, request).await {
-        Ok(Some(response)) => response,
-        Ok(None) => (axum::http::StatusCode::NOT_FOUND, "Pool mapping not found").into_response(),
-        Err(err) => (
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            err.to_string(),
-        )
-            .into_response(),
+    // Stage 3: Execution via HostContext and dispatch_request
+    // Note: provider_hint is intentionally NOT passed to dispatch_request.
+    // See chat_completions handler for detailed explanation.
+    let ctx = HostContext::from_parts(&runtime.engine, &*runtime);
+    match dispatch_request(
+        &ctx,
+        HostDispatchTarget::Service(&service_id),
+        HostProtocol::OpenAiEmbeddings,
+        None,
+        HostRequest::Embeddings(request),
+    )
+    .await
+    {
+        Ok(outcome) => match outcome {
+            HostDispatchOutcome::Response(response) => into_axum_response(response),
+            HostDispatchOutcome::PoolNotFound => (
+                StatusCode::NOT_FOUND,
+                "Pool mapping not found",
+            )
+                .into_response(),
+            _ => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Unexpected dispatch outcome",
+            )
+                .into_response(),
+        },
+        Err(err) => error_response_for_host_error(&err),
     }
 }

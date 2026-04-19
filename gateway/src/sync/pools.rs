@@ -1,7 +1,8 @@
-use sqlx::{Pool, Postgres};
 use std::collections::HashMap;
+
+use sqlx::{Pool, Postgres};
 use tracing::{info, warn};
-use unigateway_core::{
+use unigateway_sdk::core::{
     Endpoint, LoadBalancingStrategy, ModelPolicy, ProviderKind, ProviderPool, RetryPolicy,
     SecretString, UniGatewayEngine,
 };
@@ -96,6 +97,9 @@ pub async fn load_all_pools(db: &Pool<Postgres>, engine: &UniGatewayEngine) -> a
 
             let endpoint = Endpoint {
                 endpoint_id: key.id.clone(),
+                provider_name: Some(account.provider_type.clone()),
+                source_endpoint_id: Some(key.id.clone()),
+                provider_family: Some(account.provider_type.clone()),
                 provider_kind,
                 driver_id: driver_id.to_string(),
                 base_url: account.base_url.clone(),

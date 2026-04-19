@@ -1,66 +1,42 @@
-use anyhow::Result;
 use sqlx::{Pool, Postgres};
-
-use unigateway_core::{
-    ProviderPool, UniGatewayEngine,
-};
-use unigateway_runtime::host::{
-    ResolvedProvider, RuntimeConfig, RuntimeConfigHost, RuntimeEngineHost, RuntimeFuture,
-    RuntimePoolHost, RuntimeRoutingHost,
+use unigateway_sdk::core::UniGatewayEngine;
+use unigateway_sdk::host::{
+    EnvPoolHost, HostFuture, PoolHost, PoolLookupOutcome, PoolLookupResult,
 };
 
+/// ParaRouter runtime state combining database connection and UniGateway engine.
 pub struct ParaRouterRuntime {
     pub db: Pool<Postgres>,
     pub engine: UniGatewayEngine,
-    pub openai_base_url: String,
-    pub openai_api_key: String,
-    pub openai_model: String,
-    pub anthropic_base_url: String,
-    pub anthropic_api_key: String,
-    pub anthropic_model: String,
 }
 
-impl RuntimeConfigHost for ParaRouterRuntime {
-    fn runtime_config(&self) -> RuntimeConfig<'_> {
-        RuntimeConfig {
-            openai_base_url: &self.openai_base_url,
-            openai_api_key: &self.openai_api_key,
-            openai_model: &self.openai_model,
-            anthropic_base_url: &self.anthropic_base_url,
-            anthropic_api_key: &self.anthropic_api_key,
-            anthropic_model: &self.anthropic_model,
-        }
+impl ParaRouterRuntime {
+    /// Create a new runtime with the given database pool and engine.
+    pub fn new(db: Pool<Postgres>, engine: UniGatewayEngine) -> Self {
+        Self { db, engine }
     }
 }
 
-impl RuntimeEngineHost for ParaRouterRuntime {
-    fn core_engine(&self) -> &UniGatewayEngine {
-        &self.engine
-    }
-}
-
-impl RuntimePoolHost for ParaRouterRuntime {
+impl PoolHost for ParaRouterRuntime {
     fn pool_for_service<'a>(
         &'a self,
         service_id: &'a str,
-    ) -> RuntimeFuture<'a, Result<Option<ProviderPool>>> {
+    ) -> HostFuture<'a, PoolLookupResult<PoolLookupOutcome>> {
         Box::pin(async move {
-            Ok(self.engine.get_pool(service_id).await)
+            match self.engine.get_pool(service_id).await {
+                Some(pool) => Ok(PoolLookupOutcome::found(pool)),
+                None => Ok(PoolLookupOutcome::not_found()),
+            }
         })
     }
 }
 
-impl RuntimeRoutingHost for ParaRouterRuntime {
-    fn resolve_providers<'a>(
+impl EnvPoolHost for ParaRouterRuntime {
+    fn env_pool<'a>(
         &'a self,
-        _service_id: &'a str,
-        _protocol: &'a str,
-        _hint: Option<&'a str>,
-    ) -> RuntimeFuture<'a, Result<Vec<ResolvedProvider>>> {
-        Box::pin(async move {
-            // For now, ParaRouter routing directly targets the pool.
-            // When building model_pricings mapped proxying later, this is where we return the mapped upstream models.
-            Ok(vec![])
-        })
+        _provider: unigateway_sdk::host::EnvProvider,
+        _api_key_override: Option<&'a str>,
+    ) -> HostFuture<'a, PoolLookupResult<PoolLookupOutcome>> {
+        Box::pin(async move { Ok(PoolLookupOutcome::not_found()) })
     }
 }

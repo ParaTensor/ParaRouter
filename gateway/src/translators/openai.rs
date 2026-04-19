@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
-use unigateway_core::{Message, MessageRole, ProxyChatRequest, ProxyEmbeddingsRequest};
+use unigateway_sdk::core::{Message, MessageRole, ProxyChatRequest, ProxyEmbeddingsRequest};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PermissiveChatMessage {
