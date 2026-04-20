@@ -5,11 +5,62 @@ use std::collections::HashMap;
 use unigateway_sdk::core::{Message, MessageRole, ProxyChatRequest};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TextContent {
+    #[serde(rename = "type")]
+    pub content_type: String,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum Content {
+    Simple(String),
+    Blocks(Vec<TextContent>),
+}
+
+impl Content {
+    pub fn extract_text(&self) -> String {
+        match self {
+            Content::Simple(s) => s.clone(),
+            Content::Blocks(blocks) => {
+                blocks.iter()
+                    .filter(|b| b.content_type == "text")
+                    .map(|b| b.text.clone())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PermissiveAnthropicMessage {
     pub role: String,
-    pub content: String,
+    pub content: Content,
     #[serde(flatten)]
     pub extra: HashMap<String, Value>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum SystemPrompt {
+    Simple(String),
+    Blocks(Vec<TextContent>),
+}
+
+impl SystemPrompt {
+    pub fn extract_text(&self) -> String {
+        match self {
+            SystemPrompt::Simple(s) => s.clone(),
+            SystemPrompt::Blocks(blocks) => {
+                blocks.iter()
+                    .filter(|b| b.content_type == "text")
+                    .map(|b| b.text.clone())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -22,8 +73,8 @@ pub struct PermissiveAnthropicRequest {
     #[serde(rename = "top_p")]
     pub top_p: Option<f32>,
     pub stream: Option<bool>,
-    /// System prompt (anthropic-specific field at top level)
-    pub system: Option<String>,
+    /// System prompt (anthropic-specific field at top level) - can be string or array of blocks
+    pub system: Option<SystemPrompt>,
 
     /// When set, chat is routed to this provider account for the given logical `model` id.
     #[serde(default)]
@@ -49,10 +100,11 @@ pub fn into_core_chat_request(
 
     // If system prompt is provided at top level (anthropic style), prepend as system message
     if let Some(system) = permissive.system {
-        if !system.is_empty() {
+        let system_text = system.extract_text();
+        if !system_text.is_empty() {
             core_messages.push(Message {
                 role: MessageRole::System,
-                content: system,
+                content: system_text,
             });
         }
     }
@@ -65,7 +117,7 @@ pub fn into_core_chat_request(
         };
         core_messages.push(Message {
             role,
-            content: msg.content,
+            content: msg.content.extract_text(),
         });
     }
 
