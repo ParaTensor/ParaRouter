@@ -18,8 +18,12 @@ pub struct PermissiveChatRequest {
     pub messages: Option<Vec<PermissiveChatMessage>>,
     pub temperature: Option<f32>,
     pub top_p: Option<f32>,
+    pub top_k: Option<u32>,
     pub max_tokens: Option<u32>,
+    pub stop: Option<Value>,
     pub stream: Option<bool>,
+    pub tools: Option<Value>,
+    pub tool_choice: Option<Value>,
     /// When set, chat is routed to this provider account for the given logical `model` id.
     #[serde(default)]
     pub pararouter_provider_account_id: Option<String>,
@@ -80,8 +84,14 @@ pub fn into_core_chat_request(
         messages: core_messages,
         temperature: permissive.temperature,
         top_p: permissive.top_p,
+        top_k: permissive.top_k,
         max_tokens: permissive.max_tokens,
+        stop_sequences: permissive.stop,
         stream: permissive.stream.unwrap_or(false),
+        system: None,
+        tools: permissive.tools,
+        tool_choice: permissive.tool_choice,
+        raw_messages: None,
         metadata: HashMap::new(), // Auth layer will inject contextual metadata later
     })
 }

@@ -72,6 +72,11 @@ pub struct PermissiveAnthropicRequest {
     pub temperature: Option<f32>,
     #[serde(rename = "top_p")]
     pub top_p: Option<f32>,
+    #[serde(rename = "top_k")]
+    pub top_k: Option<u32>,
+    pub tools: Option<Value>,
+    pub tool_choice: Option<Value>,
+    pub stop_sequences: Option<Value>,
     pub stream: Option<bool>,
     /// System prompt (anthropic-specific field at top level) - can be string or array of blocks
     pub system: Option<SystemPrompt>,
@@ -87,6 +92,14 @@ pub struct PermissiveAnthropicRequest {
 pub fn into_core_chat_request(
     permissive: PermissiveAnthropicRequest,
 ) -> Result<ProxyChatRequest, String> {
+    let raw_messages = serde_json::to_value(&permissive.messages)
+        .map_err(|error| format!("failed to serialize anthropic messages: {error}"))?;
+    let system = permissive
+        .system
+        .as_ref()
+        .map(serde_json::to_value)
+        .transpose()
+        .map_err(|error| format!("failed to serialize anthropic system prompt: {error}"))?;
     let model = permissive.model;
     if model.is_empty() {
         return Err("missing required field: model".to_string());
@@ -134,8 +147,14 @@ pub fn into_core_chat_request(
         messages: core_messages,
         temperature: permissive.temperature,
         top_p: permissive.top_p,
+        top_k: permissive.top_k,
         max_tokens: permissive.max_tokens,
+        stop_sequences: permissive.stop_sequences,
         stream: permissive.stream.unwrap_or(false),
+        system,
+        tools: permissive.tools,
+        tool_choice: permissive.tool_choice,
+        raw_messages: Some(raw_messages),
         metadata,
     })
 }
