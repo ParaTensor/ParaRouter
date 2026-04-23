@@ -2,6 +2,7 @@ import type {Request, Response} from 'express';
 import {Router} from 'express';
 import {pool} from '../db';
 import {requireRole} from '../middleware/auth';
+import { canonicalizeGlobalModelName } from '../utils';
 
 /** 首页等匿名场景；在 server 中挂在全局 authenticate 之前 */
 export async function handlePublicLlmModelsList(_req: Request, res: Response) {
@@ -35,12 +36,13 @@ router.post('/', async (req, res) => {
   const ctx = rawCtx !== null && Number.isFinite(rawCtx) ? rawCtx : null;
 
   try {
+    const normalizedName = canonicalizeGlobalModelName(rawId, req.body?.provider, name);
     await pool.query(
       `INSERT INTO llm_models (id, name, description, context_length, global_pricing, updated_at)
        VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
       [
         rawId,
-        name,
+        normalizedName,
         description,
         ctx,
         JSON.stringify(global_pricing && typeof global_pricing === 'object' ? global_pricing : {}),
@@ -62,6 +64,9 @@ router.put('/:id', async (req, res) => {
   const { name, description, context_length, global_pricing } = req.body;
   if (!id) return res.status(400).json({ error: 'id required' });
 
+  const nextName =
+    name === undefined || name === null ? null : canonicalizeGlobalModelName(id, req.body?.provider, String(name));
+
   await pool.query(
     `UPDATE llm_models
      SET name = COALESCE($2, name),
@@ -70,7 +75,7 @@ router.put('/:id', async (req, res) => {
          global_pricing = COALESCE($5::jsonb, global_pricing),
          updated_at = $6
      WHERE id = $1`,
-    [id, name, description, context_length, global_pricing ? JSON.stringify(global_pricing) : null, Date.now()],
+    [id, nextName, description, context_length, global_pricing ? JSON.stringify(global_pricing) : null, Date.now()],
   );
   res.json({ status: 'updated' });
 });
@@ -94,6 +99,7 @@ router.post('/remote-sync', requireRole('admin'), async (req, res) => {
     // Simulate updating DB
     for (const model of modelsToSync) {
       if (!model.id) continue;
+      const normalizedName = canonicalizeGlobalModelName(model.id, model.provider, model.name);
       await pool.query(
         `INSERT INTO llm_models (id, name, description, context_length, global_pricing, updated_at)
          VALUES ($1, $2, $3, $4, $5::jsonb, $6)
@@ -106,7 +112,7 @@ router.post('/remote-sync', requireRole('admin'), async (req, res) => {
            updated_at = $6`,
         [
           model.id,
-          model.name || model.id,
+          normalizedName,
           model.description || '',
           model.context_length || null,
           JSON.stringify(model.global_pricing || {}),

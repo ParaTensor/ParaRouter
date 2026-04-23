@@ -17,7 +17,7 @@ import {
 const router = Router();
 
 router.post('/login', async (req, res) => {
-  const accountRaw = String(req.body?.account || '').trim();
+  const accountRaw = String(req.body?.account || req.body?.username || '').trim();
   const password = String(req.body?.password || '');
   if (!accountRaw || !password) {
     return res.status(400).json({ error: 'account and password required' });

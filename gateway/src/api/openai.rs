@@ -7,6 +7,8 @@ use axum::{
     Json,
 };
 use axum::body::Body;
+use serde_json::Value;
+use url::Url;
 
 use unigateway_sdk::core::ExecutionTarget;
 use unigateway_sdk::host::{
@@ -54,6 +56,83 @@ fn error_response_for_host_error(err: &HostError) -> Response {
         }
     });
     (status, axum::Json(error_body)).into_response()
+}
+
+fn base_url_requires_forced_tool_choice_downgrade(base_url: &str) -> bool {
+    let Ok(parsed) = Url::parse(base_url) else {
+        return false;
+    };
+
+    let Some(host) = parsed.host_str().map(|host| host.trim().to_ascii_lowercase()) else {
+        return false;
+    };
+
+    host == "memtensor.cn" || host.ends_with(".memtensor.cn")
+}
+
+fn endpoint_urls_require_forced_tool_choice_downgrade(endpoint_urls: &[String]) -> bool {
+    endpoint_urls
+        .iter()
+        .any(|base_url| base_url_requires_forced_tool_choice_downgrade(base_url))
+}
+
+fn extract_forced_tool_name(tool_choice: &Value) -> Option<&str> {
+    let tool_type = tool_choice.get("type")?.as_str()?.trim();
+    if !tool_type.eq_ignore_ascii_case("function") {
+        return None;
+    }
+
+    tool_choice
+        .get("function")?
+        .get("name")?
+        .as_str()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+}
+
+fn has_single_matching_tool(tools: Option<&Value>, forced_tool_name: &str) -> bool {
+    let Some(tool_array) = tools.and_then(Value::as_array) else {
+        return false;
+    };
+
+    if tool_array.len() != 1 {
+        return false;
+    }
+
+    let Some(tool_type) = tool_array[0].get("type").and_then(Value::as_str) else {
+        return false;
+    };
+    if !tool_type.eq_ignore_ascii_case("function") {
+        return false;
+    }
+
+    tool_array[0]
+        .get("function")
+        .and_then(|function| function.get("name"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .is_some_and(|tool_name| tool_name == forced_tool_name)
+}
+
+fn downgrade_incompatible_tool_choice(
+    endpoint_urls: &[String],
+    tools: Option<&Value>,
+    tool_choice: &mut Option<Value>,
+) -> bool {
+    if !endpoint_urls_require_forced_tool_choice_downgrade(endpoint_urls) {
+        return false;
+    }
+
+    let Some(forced_tool_name) = tool_choice.as_ref().and_then(extract_forced_tool_name) else {
+        return false;
+    };
+
+    if !has_single_matching_tool(tools, forced_tool_name) {
+        return false;
+    }
+
+    *tool_choice = Some(Value::String("required".to_string()));
+    true
 }
 
 pub async fn chat_completions(
@@ -124,6 +203,30 @@ pub async fn chat_completions(
         }
     };
 
+    let pool_endpoint_urls = runtime
+        .engine
+        .get_pool(&service_id)
+        .await
+        .map(|pool| {
+            pool.endpoints
+                .iter()
+                .map(|endpoint| endpoint.base_url.clone())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    let request_tools = request.tools.clone();
+    if downgrade_incompatible_tool_choice(
+        &pool_endpoint_urls,
+        request_tools.as_ref(),
+        &mut request.tool_choice,
+    ) {
+        request.metadata.insert(
+            "compat_tool_choice_downgraded".to_string(),
+            "forced_function_to_required".to_string(),
+        );
+    }
+
     // Stage 3: Execution via HostContext and dispatch_request
     // Note: provider_hint is intentionally NOT passed to dispatch_request here.
     // The hint (pararouter_provider_account_id) is only used at the routing stage
@@ -154,6 +257,124 @@ pub async fn chat_completions(
                 .into_response(),
         },
         Err(err) => error_response_for_host_error(&err),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        base_url_requires_forced_tool_choice_downgrade, downgrade_incompatible_tool_choice,
+        endpoint_urls_require_forced_tool_choice_downgrade,
+    };
+    use serde_json::{json, Value};
+
+    #[test]
+    fn memtensor_forced_function_downgrades_to_required_for_single_matching_tool() {
+        let endpoint_urls = vec!["https://api.memtensor.cn/v1".to_string()];
+        let tools = json!([
+            {
+                "type": "function",
+                "function": {
+                    "name": "add_numbers"
+                }
+            }
+        ]);
+        let mut tool_choice = Some(json!({
+            "type": "function",
+            "function": {
+                "name": "add_numbers"
+            }
+        }));
+
+        let rewritten = downgrade_incompatible_tool_choice(
+            &endpoint_urls,
+            Some(&tools),
+            &mut tool_choice,
+        );
+
+        assert!(rewritten);
+        assert_eq!(tool_choice, Some(Value::String("required".to_string())));
+    }
+
+    #[test]
+    fn other_openai_compatible_providers_are_left_unchanged() {
+        let endpoint_urls = vec!["https://www.kaopuapi.com/v1".to_string()];
+        let tools = json!([
+            {
+                "type": "function",
+                "function": {
+                    "name": "add_numbers"
+                }
+            }
+        ]);
+        let original = json!({
+            "type": "function",
+            "function": {
+                "name": "add_numbers"
+            }
+        });
+        let mut tool_choice = Some(original.clone());
+
+        let rewritten = downgrade_incompatible_tool_choice(
+            &endpoint_urls,
+            Some(&tools),
+            &mut tool_choice,
+        );
+
+        assert!(!rewritten);
+        assert_eq!(tool_choice, Some(original));
+    }
+
+    #[test]
+    fn downgrade_requires_a_single_matching_tool() {
+        let endpoint_urls = vec!["https://api.memtensor.cn/v1".to_string()];
+        let tools = json!([
+            {
+                "type": "function",
+                "function": {
+                    "name": "lookup_weather"
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "add_numbers"
+                }
+            }
+        ]);
+        let original = json!({
+            "type": "function",
+            "function": {
+                "name": "add_numbers"
+            }
+        });
+        let mut tool_choice = Some(original.clone());
+
+        let rewritten = downgrade_incompatible_tool_choice(
+            &endpoint_urls,
+            Some(&tools),
+            &mut tool_choice,
+        );
+
+        assert!(!rewritten);
+        assert_eq!(tool_choice, Some(original));
+    }
+
+    #[test]
+    fn compatibility_gate_tracks_upstream_host_not_provider_name() {
+        assert!(base_url_requires_forced_tool_choice_downgrade(
+            "https://api.memtensor.cn/v1"
+        ));
+        assert!(base_url_requires_forced_tool_choice_downgrade(
+            "https://gateway.memtensor.cn/custom/v1"
+        ));
+        assert!(!base_url_requires_forced_tool_choice_downgrade(
+            "https://www.kaopuapi.com/v1"
+        ));
+        assert!(endpoint_urls_require_forced_tool_choice_downgrade(&[
+            "https://www.kaopuapi.com/v1".to_string(),
+            "https://api.memtensor.cn/v1".to_string()
+        ]));
     }
 }
 

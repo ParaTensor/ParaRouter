@@ -4,6 +4,7 @@ import { pool } from '../db';
 import { requireRole } from '../middleware/auth';
 import { ModelPayload } from '@pararouter/shared';
 import {
+  canonicalizeGlobalModelName,
   parsePrice,
   parseContextLength,
   normalizeProviderId,
@@ -64,6 +65,7 @@ async function upsertModel(model: ModelPayload) {
 }
 
 async function upsertModelMetadataFromModel(model: ModelPayload) {
+  const displayName = canonicalizeGlobalModelName(model.id, model.provider, model.name);
   await pool.query(
     `INSERT INTO llm_models (id, name, description, context_length, global_pricing, updated_at)
      VALUES ($1, $2, $3, $4, $5::jsonb, $6)
@@ -76,7 +78,7 @@ async function upsertModelMetadataFromModel(model: ModelPayload) {
        updated_at = EXCLUDED.updated_at`,
     [
       model.id,
-      model.name,
+      displayName,
       model.description || '',
       parseContextLength(model.context),
       JSON.stringify({

@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, ChevronDown, Zap } from 'lucide-react';
+import { X, ChevronDown, TriangleAlert, Zap } from 'lucide-react';
 import { Select } from '../../components/Select';
 import { Combobox, ComboboxInput, ComboboxOptions, ComboboxOption, ComboboxButton, Dialog, DialogBackdrop, DialogPanel } from '@headlessui/react';
 import { ProviderKeyRow, DrawerTab, PricingPreview, PricingRow } from './types';
@@ -135,6 +135,14 @@ export default function EditPriceModal({
   const [costMultiplier, setCostMultiplier] = React.useState('1.0');
   const [salesMultiplier, setSalesMultiplier] = React.useState('1.0');
   const [activePriceView, setActivePriceView] = React.useState<'sales' | 'cost'>('sales');
+  const selectedProvider = providerKeyRows.find((row) => row.provider === providerAccountId);
+  const supportedModels = Array.isArray(selectedProvider?.supported_models) ? selectedProvider.supported_models : [];
+  const upstreamModelName = providerModelId.trim() || model.trim();
+  const showProviderModelFallbackHint = Boolean(providerAccountId) && supportedModels.length === 0;
+  const showUnsupportedProviderModelWarning =
+    supportedModels.length > 0 &&
+    Boolean(upstreamModelName) &&
+    !supportedModels.some((item) => item.toLowerCase() === upstreamModelName.toLowerCase());
 
   React.useEffect(() => {
     setFormError(null);
@@ -419,6 +427,19 @@ export default function EditPriceModal({
                         placeholder={t('editpricemodal.placeholder_alias')}
                         className="w-full px-3 py-1.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-950 transition-all text-sm"
                       />
+                      {showUnsupportedProviderModelWarning && (
+                        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                          <TriangleAlert size={14} className="mt-0.5 shrink-0" />
+                          <div>
+                            This provider reports {supportedModels.length} upstream models. <strong>{upstreamModelName}</strong> is not in that list. You can still save this pricing entry, but requests may fail until the exact upstream model id is used.
+                          </div>
+                        </div>
+                      )}
+                      {showProviderModelFallbackHint && (
+                        <p className="text-xs text-zinc-500">
+                          No provider model catalog is available for this account yet. Pricing will fall back to the global model list.
+                        </p>
+                      )}
                     </div>
                   </div>
                   

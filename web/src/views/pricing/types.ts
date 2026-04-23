@@ -31,6 +31,12 @@ export type PublishedPricingRow = PricingRow & {
 export type ProviderKeyRow = {
   provider: string;
   status: string;
+  label?: string;
+  base_url?: string;
+  docs_url?: string;
+  provider_type?: string;
+  supported_models?: string[];
+  supported_models_updated_at?: number | null;
   keys?: { id?: string; label: string }[];
 };
 

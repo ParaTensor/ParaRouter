@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS provider_accounts (
   base_url TEXT NOT NULL,
   docs_url TEXT,
   status TEXT NOT NULL DEFAULT 'active',
+  supported_models JSONB NOT NULL DEFAULT '[]'::jsonb,
+  supported_models_updated_at BIGINT,
   updated_at BIGINT NOT NULL
 );
 
@@ -276,6 +278,8 @@ ALTER TABLE provider_types ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL 
 ALTER TABLE provider_types ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT true;
 
 ALTER TABLE provider_accounts ADD COLUMN IF NOT EXISTS docs_url TEXT;
+ALTER TABLE provider_accounts ADD COLUMN IF NOT EXISTS supported_models JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE provider_accounts ADD COLUMN IF NOT EXISTS supported_models_updated_at BIGINT;
 
 CREATE TABLE IF NOT EXISTS billing_records (
   id BIGSERIAL PRIMARY KEY,

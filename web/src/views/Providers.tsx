@@ -19,6 +19,8 @@ type ProviderRow = {
   label?: string;
   base_url?: string;
   docs_url?: string;
+  supported_models?: string[];
+  supported_models_updated_at?: number | null;
   keys: ProviderKey[];
 };
 
@@ -223,6 +225,23 @@ export default function ProvidersView() {
                     <span className="text-[13px] font-medium truncate tracking-tight">{p.base_url}</span>
                   </div>
                 )}
+                <div className="flex items-start gap-3 text-zinc-500 group-hover:text-zinc-600 transition-colors">
+                  <div className="w-8 h-8 rounded-lg bg-zinc-50 border border-zinc-100/50 flex items-center justify-center shrink-0">
+                    <FileText size={15} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[13px] font-medium tracking-tight text-zinc-700">
+                      {Array.isArray(p.supported_models) && p.supported_models.length > 0
+                        ? `${p.supported_models.length} upstream models synced`
+                        : 'No upstream model catalog yet'}
+                    </div>
+                    <div className="text-[11px] text-zinc-400 mt-0.5">
+                      {p.supported_models_updated_at
+                        ? `Updated ${new Date(p.supported_models_updated_at).toLocaleString()}`
+                        : 'Pricing falls back to the global model list until the provider catalog is fetched.'}
+                    </div>
+                  </div>
+                </div>
                 {p.keys && p.keys.length > 0 && (
                   <div className="flex flex-col gap-2 max-h-[120px] overflow-y-auto pr-1 [scrollbar-width:thin] hover:[scrollbar-color:theme(colors.zinc.300)_transparent] [scrollbar-color:transparent_transparent] transition-all">
                     {p.keys.map((k, i) => {
@@ -369,7 +388,9 @@ export default function ProvidersView() {
                         </div>
                         <div className="relative">
                           <input
-                            type="password"
+                            type="text"
+                            autoComplete="off"
+                            spellCheck={false}
                             value={k.key}
                             onChange={(e) => {
                               const newKeys = [...formData.keys];

@@ -10,3 +10,4 @@ gateway/target/
 # Ignore binaries and temporary archives
 cloudflared*
 *.zip
+*.pem

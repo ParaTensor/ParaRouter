@@ -44,8 +44,19 @@ export default function ProviderAccountModal({ isOpen, onClose, onSuccess }: Pro
     setProviderSaving(true);
     try {
       await apiPut(`/api/provider-keys/${encodeURIComponent(provider)}`, {
-        ...newProvider,
         provider,
+        label: newProvider.label,
+        base_url: newProvider.base_url,
+        docs_url: newProvider.docs_url,
+        status: newProvider.status,
+        driver_type: newProvider.driver_type,
+        keys: [
+          {
+            label: 'Default',
+            key: newProvider.key,
+            status: newProvider.status,
+          },
+        ],
       });
       onSuccess(provider);
       onClose();

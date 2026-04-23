@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, RefreshCw, Edit2 } from 'lucide-react';
+import { Plus, Edit2 } from 'lucide-react';
 import { ApiError, apiGet, apiPost, apiPut } from '../lib/api';
 import { localUser } from '../lib/session';
 import { useTranslation } from "react-i18next";
@@ -27,10 +27,6 @@ export default function GlobalModelsView() {
   const [isCreating, setIsCreating] = useState(false);
   const [editForm, setEditForm] = useState<Partial<GlobalModel>>({});
   const [providerFilter, setProviderFilter] = useState<string>('all');
-  
-  const [syncUrl, setSyncUrl] = useState('');
-  const [syncing, setSyncing] = useState(false);
-  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
 
   const loadModels = async () => {
     try {
@@ -115,25 +111,6 @@ export default function GlobalModelsView() {
     }
   };
 
-  const handleRemoteSync = async () => {
-    if (!syncUrl) {
-      alert(t('globalmodels.alert_sync_url_required'));
-      return;
-    }
-    setSyncing(true);
-    try {
-      const res = await apiPost('/api/llm-models/remote-sync', { url: syncUrl });
-      alert(t('globalmodels.alert_sync_success', {count: (res as any).count}));
-      setIsSyncModalOpen(false);
-      loadModels();
-    } catch (err) {
-      console.error(err);
-      alert(t('globalmodels.alert_sync_failed'));
-    } finally {
-      setSyncing(false);
-    }
-  };
-
   if (localUser.role !== 'admin') {
     return <div className="p-8 text-center text-red-500">{t('globalmodels.access_denied_admins_only')}</div>;
   }
@@ -171,14 +148,6 @@ export default function GlobalModelsView() {
             <Plus size={16} />
             {t('globalmodels.add_model')}
           </button>
-          <button
-            type="button"
-            onClick={() => setIsSyncModalOpen(true)}
-            className="flex items-center gap-2 bg-white border border-gray-200 shadow-sm hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-          >
-            <RefreshCw size={16} />
-            {t('globalmodels.import_from_url')}
-          </button>
         </div>
       </div>
 
@@ -204,47 +173,6 @@ export default function GlobalModelsView() {
           </button>
         ))}
       </div>
-
-      {/* Sync Modal */}
-      {isSyncModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/40 backdrop-blur-sm">
-          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white">
-              <div>
-                <h3 className="font-bold text-lg">{t('globalmodels.remote_sync')}</h3>
-                <p className="text-xs text-zinc-500 mt-0.5">{t('globalmodels.remote_sync_subtitle')}</p>
-              </div>
-            </div>
-            <div className="flex-1 overflow-auto px-5 py-5 space-y-4">
-              <p className="text-sm text-zinc-500">
-                {t('globalmodels.fetch_latest_official_pricing_')}</p>
-              <div className="flex flex-col gap-3">
-                <input 
-                  type="text" 
-                  placeholder={t('globalmodels.placeholder_url')} 
-                  value={syncUrl}
-                  onChange={e => setSyncUrl(e.target.value)}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-lg px-4 py-2.5 text-sm focus:outline-purple-500 focus:ring-2 focus:ring-purple-100 transition-all"
-                  autoFocus
-                />
-              </div>
-            </div>
-            <div className="border-t px-6 py-4 bg-zinc-50/80 flex flex-col sm:flex-row sm:items-center justify-end shrink-0 gap-3">
-              <button onClick={() => setIsSyncModalOpen(false)} className="text-[13px] font-bold text-zinc-500 hover:text-zinc-900 px-3">
-                {t('globalmodels.cancel')}
-              </button>
-              <button 
-                onClick={handleRemoteSync}
-                disabled={syncing}
-                className="bg-purple-600 text-white rounded-lg px-6 py-2 text-sm font-semibold shadow-sm hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
-              >
-                {syncing ? <RefreshCw size={16} className="animate-spin" /> : null}
-                {syncing ? t('globalmodels.syncing') : t('globalmodels.start_sync')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Edit Modal */}
       {isEditModalOpen && (

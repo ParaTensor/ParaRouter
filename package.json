@@ -11,6 +11,8 @@
   "scripts": {
     "gateway": "cargo run --manifest-path gateway/Cargo.toml",
     "dev": "npm run dev -w @pararouter/hub",
+    "dev:local": "bash scripts/start_local.sh",
+    "stop:local": "bash scripts/stop_local.sh",
     "build": "npm run build -w @pararouter/web",
     "preview": "npm run preview -w @pararouter/web",
     "clean": "rm -rf dist",
