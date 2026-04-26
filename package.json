@@ -16,8 +16,7 @@
     "build": "npm run build -w @pararouter/web",
     "preview": "npm run preview -w @pararouter/web",
     "clean": "rm -rf dist",
-    "lint": "npm run lint --workspaces",
-    "test:e2e": "npx tsx e2e/e2e.test.ts"
+    "lint": "npm run lint --workspaces"
   },
   "devDependencies": {
     "typescript": "~5.8.2"

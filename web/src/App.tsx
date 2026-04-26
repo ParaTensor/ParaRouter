@@ -13,6 +13,7 @@ const SettingsView = React.lazy(() => import('./views/Settings'));
 const ChatView = React.lazy(() => import('./views/Chat'));
 const DocsView = React.lazy(() => import('./views/Docs'));
 const InsightsView = React.lazy(() => import('./views/Insights'));
+const ActivityView = React.lazy(() => import('./views/Activity'));
 const PricingView = React.lazy(() => import('./views/Pricing'));
 const ProvidersView = React.lazy(() => import('./views/Providers'));
 const ModelProvidersView = React.lazy(() => import('./views/ModelProviders'));
@@ -32,10 +33,10 @@ function RouteFallback() {
 export default function App() {
   const {t} = useTranslation();
   const location = useLocation();
-  const [authVersion, setAuthVersion] = React.useState(0);
+  const [, setAuthRerender] = React.useState(0);
 
   React.useEffect(() => {
-    const onAuthChange = () => setAuthVersion((v) => v + 1);
+    const onAuthChange = () => setAuthRerender((v) => v + 1);
     window.addEventListener('pararouter-auth-changed', onAuthChange);
     return () => window.removeEventListener('pararouter-auth-changed', onAuthChange);
   }, []);
@@ -67,7 +68,7 @@ export default function App() {
           }
         >
           <div
-            key={`${location.pathname}:${authVersion}`}
+            key={location.pathname}
             className="flex-1 flex flex-col w-full min-w-0"
           >
             <React.Suspense fallback={<RouteFallback />}>
@@ -75,15 +76,9 @@ export default function App() {
                 <Route path="/login" element={authed ? <Navigate to="/models" replace /> : <LoginView />} />
                 <Route path="/" element={authed ? <Navigate to="/models" replace /> : <LandingView />} />
                 <Route path="/models" element={authed ? <ModelsView /> : <Navigate to="/login" replace />} />
-                <Route path="/insights" element={authed ? <InsightsView /> : <Navigate to="/login" replace />} />
-                <Route
-                  path="/rankings"
-                  element={authed ? <Navigate to="/insights" replace /> : <Navigate to="/login" replace />}
-                />
-                <Route
-                  path="/activity"
-                  element={authed ? <Navigate to="/insights?tab=activity" replace /> : <Navigate to="/login" replace />}
-                />
+                <Route path="/activity" element={authed ? <ActivityView /> : <Navigate to="/login" replace />} />
+                <Route path="/insights" element={authed ? <Navigate to="/activity" replace /> : <Navigate to="/login" replace />} />
+                <Route path="/rankings" element={authed ? <Navigate to="/activity" replace /> : <Navigate to="/login" replace />} />
                 <Route path="/pricing" element={authed ? <PricingView /> : <Navigate to="/login" replace />} />
                 <Route path="/providers" element={authed ? <ProvidersView /> : <Navigate to="/login" replace />} />
                 <Route path="/models/:modelId/providers" element={authed ? <ModelProvidersView /> : <Navigate to="/login" replace />} />

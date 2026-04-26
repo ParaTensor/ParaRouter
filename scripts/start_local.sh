@@ -3,9 +3,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-HUB_PORT="${HUB_PORT:-3399}"
+HUB_PORT="${HUB_PORT:-3322}"
 WEB_HOST="${WEB_HOST:-127.0.0.1}"
-DATABASE_URL="${DATABASE_URL:-postgresql://xinference:password@localhost:5432/pararouter}"
+PARAROUTER_DATABASE_URL="${PARAROUTER_DATABASE_URL:-postgresql://localhost:5432/pararouter}"
 
 hub_pid=""
 gateway_pid=""
@@ -34,13 +34,13 @@ echo "  Gateway: http://127.0.0.1:8000"
 echo "  Web:     http://${WEB_HOST}:5173"
 echo
 
-PORT="$HUB_PORT" npm run dev --prefix hub &
+DATABASE_URL="$PARAROUTER_DATABASE_URL" HUB_DISABLE_EMBEDDED_VITE=1 PORT="$HUB_PORT" npm run dev --prefix hub &
 hub_pid=$!
 
-DATABASE_URL="$DATABASE_URL" cargo run --manifest-path gateway/Cargo.toml &
+DATABASE_URL="$PARAROUTER_DATABASE_URL" cargo run --manifest-path gateway/Cargo.toml &
 gateway_pid=$!
 
-npm run dev --prefix web -- --host "$WEB_HOST" &
+VITE_API_PROXY_TARGET="http://127.0.0.1:${HUB_PORT}" npm run dev --prefix web -- --host "$WEB_HOST" &
 web_pid=$!
 
 echo "PIDs: hub=${hub_pid} gateway=${gateway_pid} web=${web_pid}"

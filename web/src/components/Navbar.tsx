@@ -2,8 +2,8 @@ import React from 'react';
 import {Menu, X, ChevronDown, Key, Settings, LogOut, LayoutGrid, BarChart3, MessageSquare, BookOpen, BadgeDollarSign, PlugZap, Database, UsersRound} from 'lucide-react';
 import {cn} from '../lib/utils';
 import {APP_SHELL_MAX_CLASS, APP_SHELL_PAD_CLASS} from '../lib/appShellLayout';
-import {clearAuthSession, localUser} from '../lib/session';
-import {apiPost} from '../lib/api';
+import {clearAuthSession, localUser, getAuthSession, setAuthSession} from '../lib/session';
+import {apiPost, apiGet} from '../lib/api';
 import {Link, useLocation, useNavigate} from 'react-router-dom';
 import { useTranslation } from "react-i18next";
 import LocaleSwitcher from './LocaleSwitcher';
@@ -13,6 +13,29 @@ export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+
+  const isAdmin = localUser.role === 'admin';
+  const isAdminPage = isAdmin && ['/pricing', '/providers', '/customers', '/global-models'].some(
+    (p) => location.pathname === p || location.pathname.startsWith(p + '/')
+  );
+
+  React.useEffect(() => {
+    const refreshBalance = async () => {
+      try {
+        const data = await apiGet<{ balance?: number }>('/api/auth/me');
+        if (typeof data?.balance === 'number') {
+          const session = getAuthSession();
+          if (session) {
+            session.user.balance = data.balance;
+            setAuthSession(session);
+          }
+        }
+      } catch {
+        // ignore refresh errors
+      }
+    };
+    refreshBalance();
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -26,7 +49,7 @@ export default function Navbar() {
 
   const navLinks = [
     {id: '/models', labelKey: 'navbar.models', icon: LayoutGrid},
-    {id: '/insights', labelKey: 'navbar.insights', icon: BarChart3},
+    {id: '/activity', labelKey: 'navbar.activity', icon: BarChart3},
     {id: '/pricing', labelKey: 'navbar.pricing', icon: BadgeDollarSign, adminOnly: true},
     {id: '/providers', labelKey: 'navbar.providers', icon: PlugZap, adminOnly: true},
     {id: '/chat', labelKey: 'navbar.chat', icon: MessageSquare},
@@ -68,10 +91,12 @@ export default function Navbar() {
           </div>
 
           <div className="flex items-center gap-3 sm:gap-4">
-            <div className="hidden cursor-pointer items-center gap-2 rounded-full border border-zinc-200 px-2.5 py-1 text-[13px] font-medium text-zinc-600 transition-colors hover:bg-zinc-50 sm:flex">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              {t('navbar.0_00')}
-            </div>
+            {localUser.role !== 'admin' && (
+              <div className="hidden cursor-pointer items-center gap-2 rounded-full border border-zinc-200 px-2.5 py-1 text-[13px] font-medium text-zinc-600 transition-colors hover:bg-zinc-50 sm:flex">
+                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                ${(localUser.balance || 0).toFixed(2)}
+              </div>
+            )}
 
             <LocaleSwitcher className="hidden sm:flex" />
 
@@ -98,7 +123,7 @@ export default function Navbar() {
                   className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-zinc-600 hover:text-black hover:bg-gray-50 transition-colors"
                 >
                   <Settings size={14} /> {t('navbar.settings')}</button>
-                {localUser?.role === 'admin' && (
+                {isAdmin && (
                   <>
                     <div className="my-1.5 h-px bg-zinc-100" />
                     <div className="px-4 py-1.5 mb-0.5">

@@ -64,6 +64,24 @@ export function toAuthSessionResponse(token: string, user: AuthUser): AuthSessio
 }
 
 export async function sendRegisterVerificationEmail(email: string, code: string) {
+  await sendEmail({
+    to: [email],
+    subject: 'ParaRouter registration verification code',
+    html: `<p>Your ParaRouter verification code is:</p><h2>${code}</h2><p>This code will expire in 10 minutes.</p>`,
+  });
+}
+
+export async function sendEmail({
+  to,
+  subject,
+  html,
+  text,
+}: {
+  to: string[];
+  subject: string;
+  html: string;
+  text?: string;
+}) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     throw new Error('RESEND_API_KEY is not configured');
@@ -77,9 +95,10 @@ export async function sendRegisterVerificationEmail(email: string, code: string)
     },
     body: JSON.stringify({
       from,
-      to: [email],
-      subject: 'ParaRouter registration verification code',
-      html: `<p>Your ParaRouter verification code is:</p><h2>${code}</h2><p>This code will expire in 10 minutes.</p>`,
+      to,
+      subject,
+      html,
+      text,
     }),
   });
   if (!response.ok) {
@@ -96,22 +115,13 @@ export function normalizeProviderId(provider: string) {
     .replace(/^_+|_+$/g, '');
 }
 
-export function normalizeProviderBaseUrl(baseUrl: string, driverType?: string | null) {
+export function normalizeProviderBaseUrl(baseUrl: string, _driverType?: string | null) {
   const trimmed = String(baseUrl || '').trim();
   if (!trimmed) return '';
 
-  const normalizedDriverType = String(driverType || '').trim().toLowerCase();
-
   try {
     const url = new URL(trimmed);
-    url.pathname = url.pathname.replace(/\/+$/, '') || '';
-
-    if (normalizedDriverType === 'openai_compatible' || normalizedDriverType === 'anthropic') {
-      if (!/\/v\d+(?:beta\d+)?$/i.test(url.pathname)) {
-        url.pathname = `${url.pathname || ''}/v1`.replace(/\/+/g, '/');
-      }
-    }
-
+    // Strip trailing slashes only; leave path decisions to the Gateway runtime.
     return url.toString().replace(/\/+$/, '');
   } catch {
     return trimmed.replace(/\/+$/, '');
@@ -140,6 +150,23 @@ export function canonicalizeGlobalModelName(
   return shouldUseRawId ? id : fallback || id;
 }
 
+function modelIdFromCatalogItem(item: unknown): string {
+  if (typeof item === 'string') {
+    return item.trim();
+  }
+  if (!item || typeof item !== 'object') {
+    return '';
+  }
+  const o = item as Record<string, unknown>;
+  for (const key of ['id', 'model', 'name', 'model_id']) {
+    const v = o[key];
+    if (typeof v === 'string' && v.trim()) {
+      return v.trim();
+    }
+  }
+  return '';
+}
+
 export function normalizeSupportedModels(raw: unknown) {
   const items = Array.isArray(raw)
     ? raw
@@ -147,22 +174,16 @@ export function normalizeSupportedModels(raw: unknown) {
       ? (raw as { data?: unknown[] }).data || []
       : Array.isArray((raw as { models?: unknown[] } | null)?.models)
         ? (raw as { models?: unknown[] }).models || []
-        : [];
+        : Array.isArray((raw as { list?: unknown[] } | null)?.list)
+          ? (raw as { list?: unknown[] }).list || []
+          : [];
 
   const ids = new Set<string>();
   for (const item of items) {
-    const value =
-      typeof item === 'string'
-        ? item
-        : item && typeof item === 'object'
-          ? typeof (item as { id?: unknown }).id === 'string'
-            ? String((item as { id?: string }).id)
-            : typeof (item as { name?: unknown }).name === 'string'
-              ? String((item as { name?: string }).name)
-              : ''
-          : '';
-    const normalized = value.trim();
-    if (normalized) ids.add(normalized);
+    const normalized = modelIdFromCatalogItem(item);
+    if (normalized) {
+      ids.add(normalized);
+    }
   }
 
   return Array.from(ids).sort((left, right) => left.localeCompare(right));
@@ -172,7 +193,8 @@ function hasSupportedModelShape(raw: unknown) {
   return (
     Array.isArray(raw) ||
     Array.isArray((raw as { data?: unknown[] } | null)?.data) ||
-    Array.isArray((raw as { models?: unknown[] } | null)?.models)
+    Array.isArray((raw as { models?: unknown[] } | null)?.models) ||
+    Array.isArray((raw as { list?: unknown[] } | null)?.list)
   );
 }
 
@@ -187,31 +209,63 @@ function looksLikeHtmlPayload(contentType: string | null, rawBody: string) {
 }
 
 function buildProviderModelCatalogUrls(normalizedBaseUrl: string) {
-  const candidates = new Set<string>([`${normalizedBaseUrl}/models`]);
-
+  const ordered: string[] = [];
+  const add = (url: string) => {
+    if (!ordered.includes(url)) {
+      ordered.push(url);
+    }
+  };
   if (!/\/v\d+(?:beta\d+)?$/i.test(normalizedBaseUrl)) {
-    candidates.add(`${normalizedBaseUrl}/v1/models`);
+    add(`${normalizedBaseUrl}/v1/models`);
   }
+  add(`${normalizedBaseUrl}/models`);
   if (!/\/api$/i.test(normalizedBaseUrl)) {
-    candidates.add(`${normalizedBaseUrl}/api/models`);
+    add(`${normalizedBaseUrl}/api/models`);
   }
-
-  return Array.from(candidates);
+  return ordered;
 }
 
-export async function fetchProviderSupportedModels(baseUrl: string, apiKey: string) {
+const PROVIDER_MODEL_CATALOG_TIMEOUT_MS = 12_000;
+const CATALOG_BODY_PREVIEW_MAX = 6000;
+
+function truncateCatalogBodyPreview(raw: string): string {
+  const s = raw.length > CATALOG_BODY_PREVIEW_MAX ? `${raw.slice(0, CATALOG_BODY_PREVIEW_MAX)}…(truncated)` : raw;
+  return s;
+}
+
+export type ProviderCatalogFetchLogEntry = {
+  url: string;
+  http_status: number | null;
+  outcome:
+    | 'parsed'
+    | 'html'
+    | 'non_json'
+    | 'http_error'
+    | 'wrong_shape'
+    | 'timeout'
+    | 'network';
+  message?: string;
+  body_preview?: string;
+};
+
+export async function fetchProviderSupportedModelsWithLog(
+  baseUrl: string,
+  apiKey: string,
+): Promise<{models: string[]; fetch_log: ProviderCatalogFetchLogEntry[]; error: string | null}> {
+  const fetch_log: ProviderCatalogFetchLogEntry[] = [];
   const normalizedBaseUrl = String(baseUrl || '').trim().replace(/\/+$/, '');
   const normalizedApiKey = String(apiKey || '').trim();
   if (!normalizedBaseUrl || !normalizedApiKey) {
-    return [];
+    return {models: [], fetch_log, error: 'Missing base URL or API key'};
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
-  try {
-    let lastError: Error | null = null;
+  let lastError: Error | null = null;
+  const urls = buildProviderModelCatalogUrls(normalizedBaseUrl);
 
-    for (const modelsUrl of buildProviderModelCatalogUrls(normalizedBaseUrl)) {
+  for (const modelsUrl of urls) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), PROVIDER_MODEL_CATALOG_TIMEOUT_MS);
+    try {
       const response = await fetch(modelsUrl, {
         method: 'GET',
         headers: {
@@ -226,7 +280,15 @@ export async function fetchProviderSupportedModels(baseUrl: string, apiKey: stri
       let payload: unknown = null;
 
       if (looksLikeHtmlPayload(contentType, rawBody)) {
-        lastError = new Error(`GET ${modelsUrl} returned HTML instead of a model catalog`);
+        const msg = `GET ${modelsUrl} returned HTML instead of a model catalog`;
+        lastError = new Error(msg);
+        fetch_log.push({
+          url: modelsUrl,
+          http_status: response.status,
+          outcome: 'html',
+          message: msg,
+          body_preview: truncateCatalogBodyPreview(rawBody),
+        });
         continue;
       }
 
@@ -234,29 +296,100 @@ export async function fetchProviderSupportedModels(baseUrl: string, apiKey: stri
         try {
           payload = JSON.parse(rawBody);
         } catch {
-          lastError = new Error(`GET ${modelsUrl} returned non-JSON content`);
+          const msg = `GET ${modelsUrl} returned non-JSON content`;
+          lastError = new Error(msg);
+          fetch_log.push({
+            url: modelsUrl,
+            http_status: response.status,
+            outcome: 'non_json',
+            message: msg,
+            body_preview: truncateCatalogBodyPreview(rawBody),
+          });
           continue;
         }
       }
 
       if (!response.ok) {
         const detail = payload == null ? '' : JSON.stringify(payload);
-        lastError = new Error(`GET ${modelsUrl} failed: ${response.status}${detail ? ` ${detail}` : ''}`);
+        const msg = `GET ${modelsUrl} failed: ${response.status}${detail ? ` ${detail}` : ''}`;
+        lastError = new Error(msg);
+        fetch_log.push({
+          url: modelsUrl,
+          http_status: response.status,
+          outcome: 'http_error',
+          message: msg,
+          body_preview: truncateCatalogBodyPreview(rawBody || detail || ''),
+        });
         continue;
       }
 
       if (!hasSupportedModelShape(payload)) {
-        lastError = new Error(`GET ${modelsUrl} returned JSON without a supported model list`);
+        const msg = `GET ${modelsUrl} returned JSON without a supported model list`;
+        lastError = new Error(msg);
+        const preview =
+          typeof payload === 'object' && payload !== null
+            ? truncateCatalogBodyPreview(JSON.stringify(payload))
+            : truncateCatalogBodyPreview(rawBody);
+        fetch_log.push({
+          url: modelsUrl,
+          http_status: response.status,
+          outcome: 'wrong_shape',
+          message: msg,
+          body_preview: preview,
+        });
         continue;
       }
 
-      return normalizeSupportedModels(payload);
+      const models = normalizeSupportedModels(payload);
+      fetch_log.push({
+        url: modelsUrl,
+        http_status: response.status,
+        outcome: 'parsed',
+        message: `Parsed ${models.length} model id(s)`,
+        body_preview: truncateCatalogBodyPreview(rawBody),
+      });
+      return {models, fetch_log, error: null};
+    } catch (error) {
+      const isAbort =
+        (error instanceof Error && error.name === 'AbortError') ||
+        (typeof error === 'object' &&
+          error !== null &&
+          'name' in error &&
+          (error as {name?: string}).name === 'AbortError');
+      if (isAbort) {
+        lastError = new Error(
+          `GET ${modelsUrl} timed out after ${PROVIDER_MODEL_CATALOG_TIMEOUT_MS / 1000}s`,
+        );
+        fetch_log.push({
+          url: modelsUrl,
+          http_status: null,
+          outcome: 'timeout',
+          message: lastError.message,
+        });
+      } else {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        fetch_log.push({
+          url: modelsUrl,
+          http_status: null,
+          outcome: 'network',
+          message: lastError.message,
+        });
+      }
+    } finally {
+      clearTimeout(timeout);
     }
-
-    throw lastError || new Error(`Failed to fetch supported models from ${normalizedBaseUrl}`);
-  } finally {
-    clearTimeout(timeout);
   }
+
+  const errMsg = (lastError || new Error(`Failed to fetch supported models from ${normalizedBaseUrl}`)).message;
+  return {models: [], fetch_log, error: errMsg};
+}
+
+export async function fetchProviderSupportedModels(baseUrl: string, apiKey: string) {
+  const {models, error} = await fetchProviderSupportedModelsWithLog(baseUrl, apiKey);
+  if (error) {
+    throw new Error(error);
+  }
+  return models;
 }
 
 export function parsePrice(raw: string | undefined) {
@@ -269,6 +402,47 @@ export function parseContextLength(raw: string | undefined) {
   if (!raw) return null;
   const value = Number(String(raw).replace(/[^0-9]/g, ''));
   return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+/**
+ * 将上游 /models 返回的名称映射为 `llm_models.id`：优先精确匹配 id，否则若仅有一个全局 id 的尾段与上游名一致则收束到该 id。
+ */
+export function mapVendorModelNamesToGlobalIds(
+  vendorNames: string[],
+  globalRows: { id: string }[],
+): string[] {
+  const out = new Set<string>();
+  for (const raw of vendorNames) {
+    const v = String(raw || '').trim();
+    if (!v) continue;
+    const exact = globalRows.find((g) => g.id === v);
+    if (exact) {
+      out.add(exact.id);
+      continue;
+    }
+    const suffixMatches = globalRows.filter((g) => {
+      const suf = g.id.includes('/') ? g.id.split('/').pop()! : g.id;
+      return suf === v;
+    });
+    if (suffixMatches.length === 1) {
+      out.add(suffixMatches[0].id);
+    }
+  }
+  return [...out];
+}
+
+/** 定价下拉里：当密钥/账号已列出 supported_models 时，判断某个全局 id 是否在目录中（精确或尾段匹配，大小写不敏感）。 */
+export function globalModelIdMatchesKeyCatalog(globalId: string, catalog: string[]): boolean {
+  if (catalog.length === 0) return true;
+  const g = globalId.trim();
+  if (!g) return false;
+  const gSuf = g.includes('/') ? g.split('/').pop()! : g;
+  return catalog.some((c) => {
+    const cv = String(c || '').trim();
+    if (!cv) return false;
+    if (cv.toLowerCase() === g.toLowerCase()) return true;
+    return cv.toLowerCase() === gSuf.toLowerCase();
+  });
 }
 
 export function mapPricingRow(row: any) {

@@ -36,12 +36,18 @@ function extractErrorMessage(responseBody: any): string {
   return '';
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+type RequestOptions = {
+  /** AbortSignal（例如 AbortSignal.timeout(ms)）避免请求永久挂起 */
+  signal?: AbortSignal;
+};
+
+async function request<T>(method: string, path: string, body?: unknown, options?: RequestOptions): Promise<T> {
   const url = resolveApiUrl(path);
   const response = await fetch(url, {
     method,
     headers: withAuthHeaders(body == null ? undefined : {'Content-Type': 'application/json'}),
     body: body == null ? undefined : JSON.stringify(body),
+    signal: options?.signal,
   });
   if (!response.ok) {
     const rawBody = await response.text();
@@ -62,22 +68,22 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return response.json() as Promise<T>;
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
-  return request<T>('GET', path);
+export async function apiGet<T>(path: string, options?: RequestOptions): Promise<T> {
+  return request<T>('GET', path, undefined, options);
 }
 
-export async function apiPost<T>(path: string, body: unknown): Promise<T> {
-  return request<T>('POST', path, body);
+export async function apiPost<T>(path: string, body: unknown, options?: RequestOptions): Promise<T> {
+  return request<T>('POST', path, body, options);
 }
 
-export async function apiPut<T>(path: string, body: unknown): Promise<T> {
-  return request<T>('PUT', path, body);
+export async function apiPut<T>(path: string, body: unknown, options?: RequestOptions): Promise<T> {
+  return request<T>('PUT', path, body, options);
 }
 
-export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
-  return request<T>('PATCH', path, body);
+export async function apiPatch<T>(path: string, body: unknown, options?: RequestOptions): Promise<T> {
+  return request<T>('PATCH', path, body, options);
 }
 
-export async function apiDelete(path: string): Promise<void> {
-  await request<void>('DELETE', path);
+export async function apiDelete(path: string, options?: RequestOptions): Promise<void> {
+  await request<void>('DELETE', path, undefined, options);
 }

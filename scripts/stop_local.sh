@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-HUB_PORT="${HUB_PORT:-3399}"
+HUB_PORT="${HUB_PORT:-3322}"
 GATEWAY_PORT="${GATEWAY_PORT:-8000}"
 WEB_PORT="${WEB_PORT:-5173}"
 

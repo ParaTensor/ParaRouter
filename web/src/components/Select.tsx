@@ -11,6 +11,8 @@ export function cn(...inputs: (string | undefined | null | false)[]) {
 export type Option = {
   value: string;
   label: string;
+  /** 悬停提示（长文案时可与 label 相同） */
+  title?: string;
 };
 
 export type SelectProps = {
@@ -46,13 +48,18 @@ export function Select({ value, onChange, options, placeholder = "Select...", cl
         disabled={disabled}
         onClick={() => setOpen(!open)}
         className={cn(
-          "flex h-10 w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-950 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+          "flex h-10 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-left text-sm ring-offset-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-950 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
           open && "ring-2 ring-zinc-950 ring-offset-2",
           className
         )}
       >
-        <span className="truncate">{selectedOption ? selectedOption.label : placeholder}</span>
-        <ChevronDown className="h-4 w-4 opacity-50" />
+        <span
+          className="min-w-0 flex-1 truncate"
+          title={selectedOption ? selectedOption.title ?? selectedOption.label : undefined}
+        >
+          {selectedOption ? selectedOption.label : placeholder}
+        </span>
+        <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
       </button>
 
       {open && (
@@ -62,23 +69,22 @@ export function Select({ value, onChange, options, placeholder = "Select...", cl
           ) : (
             options.map((option) => (
               <button
-                key={option.value}
+                key={option.value === '' ? '__placeholder__' : option.value}
                 type="button"
+                title={option.title ?? option.label}
                 onClick={() => {
                   onChange(option.value);
                   setOpen(false);
                 }}
                 className={cn(
-                  "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-zinc-100 hover:text-zinc-900 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+                  "flex w-full min-w-0 cursor-default select-none items-start gap-2 rounded-sm py-1.5 pl-2 pr-2 text-left text-sm text-zinc-900 outline-none hover:bg-zinc-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
                   value === option.value && "bg-zinc-50 font-medium"
                 )}
               >
-                {value === option.value && (
-                  <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-                    <Check className="h-4 w-4" />
-                  </span>
-                )}
-                <span>{option.label}</span>
+                <span className="flex h-5 w-4 shrink-0 items-center justify-start pt-0.5 text-zinc-600">
+                  {value === option.value ? <Check className="h-3.5 w-3.5" strokeWidth={2.5} /> : null}
+                </span>
+                <span className="min-w-0 flex-1 break-words leading-snug">{option.label}</span>
               </button>
             ))
           )}

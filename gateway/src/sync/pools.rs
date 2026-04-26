@@ -57,13 +57,16 @@ pub async fn load_all_pools(db: &Pool<Postgres>, engine: &UniGatewayEngine) -> a
         id: String,
         provider_account_id: String,
         api_key: String,
+        health_status: String,
     }
 
     let keys = sqlx::query_as::<_, KeyRow>(
         r#"
-        SELECT id, provider_account_id, api_key 
+        SELECT id, provider_account_id, api_key,
+               COALESCE(health_status, 'unknown') AS health_status
         FROM provider_api_keys 
         WHERE status = 'active'
+          AND COALESCE(health_status, 'unknown') <> 'unhealthy'
         "#,
     )
     .fetch_all(db)
@@ -111,6 +114,13 @@ pub async fn load_all_pools(db: &Pool<Postgres>, engine: &UniGatewayEngine) -> a
     let mut pool_endpoints: HashMap<String, Vec<Endpoint>> = HashMap::new();
     for key in keys {
         if let Some(account) = account_map.get(&key.provider_account_id) {
+            if key.health_status.eq_ignore_ascii_case("unhealthy") {
+                warn!(
+                    "Pool sync: key {} for account '{}' is unhealthy, skipping",
+                    key.id, key.provider_account_id
+                );
+                continue;
+            }
             let provider_kind = match account.provider_type.as_str() {
                 "anthropic" => ProviderKind::Anthropic,
                 _ => ProviderKind::OpenAiCompatible,

@@ -55,9 +55,26 @@ router.put('/draft', async (req, res) => {
   if (mode === 'markup' && payload.markup_rate == null) {
     return res.status(400).json({ error: 'markup mode requires markup_rate' });
   }
+  const globalModel = await pool.query('SELECT 1 FROM llm_models WHERE id = $1 LIMIT 1', [modelId]);
+  if (globalModel.rowCount === 0) {
+    return res.status(400).json({
+      error: 'model must exist in the global model registry (llm_models); add it under Global models first',
+      model_id: modelId,
+    });
+  }
   const providerExists = await pool.query('SELECT 1 FROM provider_accounts WHERE id = $1 LIMIT 1', [providerAccountId]);
   if (providerExists.rowCount === 0) {
     return res.status(400).json({ error: 'provider_account_id not found' });
+  }
+
+  const keyOk = await pool.query(
+    `SELECT 1 FROM provider_api_keys
+     WHERE id = $1 AND provider_account_id = $2 AND status = 'active'
+     LIMIT 1`,
+    [providerKeyId, providerAccountId],
+  );
+  if (keyOk.rowCount === 0) {
+    return res.status(400).json({ error: 'provider_key_id not found for provider_account_id' });
   }
 
   await pool.query(
@@ -132,6 +149,16 @@ router.post('/draft/batch', async (req, res) => {
     return res.status(400).json({ error: 'provider_account_id not found' });
   }
 
+  const keyOk = await pool.query(
+    `SELECT 1 FROM provider_api_keys
+     WHERE id = $1 AND provider_account_id = $2 AND status = 'active'
+     LIMIT 1`,
+    [providerKeyId, providerAccountId],
+  );
+  if (keyOk.rowCount === 0) {
+    return res.status(400).json({ error: 'provider_key_id not found for provider_account_id' });
+  }
+
   const now = Date.now();
   const client = await pool.connect();
   try {
@@ -140,6 +167,14 @@ router.post('/draft/batch', async (req, res) => {
       const modelId = String(payload.model || '').trim();
       const mode = String(payload.price_mode || '').trim().toLowerCase();
       if (!modelId || (mode !== 'fixed' && mode !== 'markup')) continue;
+      const gRow = await client.query('SELECT 1 FROM llm_models WHERE id = $1 LIMIT 1', [modelId]);
+      if (gRow.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          error: 'each batch model must exist in llm_models',
+          model_id: modelId,
+        });
+      }
 
       await client.query(
         `INSERT INTO model_provider_pricings_draft (

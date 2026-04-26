@@ -45,6 +45,14 @@ CREATE TABLE IF NOT EXISTS provider_api_keys (
   label TEXT NOT NULL,
   api_key TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'active',
+  supported_models JSONB NOT NULL DEFAULT '[]'::jsonb,
+  supported_models_updated_at BIGINT,
+  health_status TEXT NOT NULL DEFAULT 'unknown',
+  health_checked_at BIGINT,
+  health_last_ok_at BIGINT,
+  health_error TEXT,
+  health_fail_count INTEGER NOT NULL DEFAULT 0,
+  health_alert_sent_at BIGINT,
   updated_at BIGINT NOT NULL
 );
 
@@ -110,6 +118,8 @@ CREATE TABLE IF NOT EXISTS activity (
   user_id TEXT,
   cost TEXT
 );
+
+CREATE INDEX IF NOT EXISTS idx_activity_user_id ON activity(user_id);
 
 CREATE TABLE IF NOT EXISTS gateways (
   instance_id TEXT PRIMARY KEY,
@@ -280,6 +290,15 @@ ALTER TABLE provider_types ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEF
 ALTER TABLE provider_accounts ADD COLUMN IF NOT EXISTS docs_url TEXT;
 ALTER TABLE provider_accounts ADD COLUMN IF NOT EXISTS supported_models JSONB NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE provider_accounts ADD COLUMN IF NOT EXISTS supported_models_updated_at BIGINT;
+
+ALTER TABLE provider_api_keys ADD COLUMN IF NOT EXISTS health_status TEXT NOT NULL DEFAULT 'unknown';
+ALTER TABLE provider_api_keys ADD COLUMN IF NOT EXISTS supported_models JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE provider_api_keys ADD COLUMN IF NOT EXISTS supported_models_updated_at BIGINT;
+ALTER TABLE provider_api_keys ADD COLUMN IF NOT EXISTS health_checked_at BIGINT;
+ALTER TABLE provider_api_keys ADD COLUMN IF NOT EXISTS health_last_ok_at BIGINT;
+ALTER TABLE provider_api_keys ADD COLUMN IF NOT EXISTS health_error TEXT;
+ALTER TABLE provider_api_keys ADD COLUMN IF NOT EXISTS health_fail_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE provider_api_keys ADD COLUMN IF NOT EXISTS health_alert_sent_at BIGINT;
 
 CREATE TABLE IF NOT EXISTS billing_records (
   id BIGSERIAL PRIMARY KEY,

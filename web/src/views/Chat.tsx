@@ -24,7 +24,14 @@ interface ChatSession {
   messages: Message[];
 }
 
-function modelRouteKey(m: { id: string; provider_account_id?: string }) {
+interface RouteModel {
+  id: string;
+  name?: string;
+  provider?: string;
+  provider_account_id?: string;
+}
+
+function modelRouteKey(m: RouteModel) {
   const pid = m.provider_account_id ?? '';
   return `${m.id}::${pid}`;
 }
@@ -33,13 +40,13 @@ export default function ChatView() {
   const { t } = useTranslation();
   const [input, setInput] = useState('');
   
-  const [models, setModels] = useState<any[]>([]);
+  const [models, setModels] = useState<RouteModel[]>([]);
   /** Stable key: logical model id + provider account (same id can appear for multiple providers). */
   const [selectedRouteKey, setSelectedRouteKey] = useState<string>('');
   
   // Load models from API
   useEffect(() => {
-    apiGet<any[]>('/api/models')
+    apiGet<RouteModel[]>('/api/models')
       .then(res => {
         if (Array.isArray(res) && res.length > 0) {
           setModels(res);
@@ -56,12 +63,12 @@ export default function ChatView() {
       });
   }, []);
 
-  const groupedModels = models.reduce((acc, curr) => {
+  const groupedModels = models.reduce<Record<string, RouteModel[]>>((acc, curr) => {
     const provider = curr.provider || 'Unknown Provider';
     if (!acc[provider]) acc[provider] = [];
     acc[provider].push(curr);
     return acc;
-  }, {} as Record<string, any[]>);
+  }, {});
 
   const selectedModelInfo = models.find(m => modelRouteKey(m) === selectedRouteKey);
   const [sessions, setSessions] = useState<ChatSession[]>(() => {

@@ -22,11 +22,14 @@ import billingRouter from './routes/billing';
 import rankingsRouter from './routes/rankings';
 import chatRouter from './routes/chat';
 import customersRouter from './routes/customers';
+import { startProviderHealthMonitor } from './provider_health';
 
 const PORT = Number(process.env.PORT || 3322);
 
 async function startServer() {
   await initSchema();
+
+  startProviderHealthMonitor();
 
   const app = express();
 
@@ -76,11 +79,15 @@ async function startServer() {
   app.use('/api/chat', chatRouter);
   app.use('/api/admin/customers', customersRouter);
 
-  if (process.env.NODE_ENV !== 'production') {
+  const disableEmbeddedVite = process.env.HUB_DISABLE_EMBEDDED_VITE === '1';
+
+  if (process.env.NODE_ENV !== 'production' && !disableEmbeddedVite) {
+    // dev:local 会同时跑 web 的 vite CLI；两边共用默认 HMR 端口会报 24678 in use
+    const hmrPort = Number(process.env.HUB_VITE_HMR_PORT) || 24679;
     const vite = await createViteServer({
       root: path.join(__dirname, '../web'),
       configFile: path.join(__dirname, '../web/vite.config.ts'),
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: { port: hmrPort } },
       appType: 'spa',
     });
     app.use(vite.middlewares);

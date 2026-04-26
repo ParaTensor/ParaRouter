@@ -102,7 +102,7 @@ pub async fn messages(
     }
 
     // Stage 2: Routing Lifecycle (find ExecutionTarget)
-    let target = match resolve_model_target(&runtime, &request.model, provider_hint.as_deref()).await {
+    let resolved = match resolve_model_target(&runtime, &request.model, provider_hint.as_deref()).await {
         Ok(t) => t,
         Err(e) => {
             return (
@@ -113,7 +113,7 @@ pub async fn messages(
         }
     };
 
-    let service_id = match &target {
+    let service_id = match &resolved.target {
         ExecutionTarget::Pool { pool_id } => pool_id.clone(),
         _ => {
             return (
@@ -130,7 +130,7 @@ pub async fn messages(
         &ctx,
         HostDispatchTarget::Service(&service_id),
         HostProtocol::AnthropicMessages,
-        None,
+        resolved.endpoint_hint.as_deref(),
         HostRequest::Chat(request),
     )
     .await

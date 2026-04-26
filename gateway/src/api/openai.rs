@@ -181,7 +181,7 @@ pub async fn chat_completions(
     }
 
     // Stage 2: Routing Lifecycle (find ExecutionTarget)
-    let target = match resolve_model_target(&runtime, &request.model, provider_hint.as_deref()).await {
+    let resolved = match resolve_model_target(&runtime, &request.model, provider_hint.as_deref()).await {
         Ok(t) => t,
         Err(e) => {
             return (
@@ -192,7 +192,7 @@ pub async fn chat_completions(
         }
     };
 
-    let service_id = match &target {
+    let service_id = match &resolved.target {
         ExecutionTarget::Pool { pool_id } => pool_id.clone(),
         _ => {
             return (
@@ -238,7 +238,7 @@ pub async fn chat_completions(
         &ctx,
         HostDispatchTarget::Service(&service_id),
         HostProtocol::OpenAiChat,
-        None,
+        resolved.endpoint_hint.as_deref(),
         HostRequest::Chat(request),
     )
     .await
@@ -421,7 +421,7 @@ pub async fn embeddings(
         request.metadata.insert("budget_limit".to_string(), budget_limit.to_string());
     }
 
-    let target = match resolve_model_target(&runtime, &request.model, provider_hint.as_deref()).await {
+    let resolved = match resolve_model_target(&runtime, &request.model, provider_hint.as_deref()).await {
         Ok(t) => t,
         Err(e) => {
             return (
@@ -432,7 +432,7 @@ pub async fn embeddings(
         }
     };
 
-    let service_id = match &target {
+    let service_id = match &resolved.target {
         ExecutionTarget::Pool { pool_id } => pool_id.clone(),
         _ => {
             return (
@@ -451,7 +451,7 @@ pub async fn embeddings(
         &ctx,
         HostDispatchTarget::Service(&service_id),
         HostProtocol::OpenAiEmbeddings,
-        None,
+        resolved.endpoint_hint.as_deref(),
         HostRequest::Embeddings(request),
     )
     .await

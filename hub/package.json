@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "lint": "tsc -p tsconfig.json"
+    "lint": "tsc -p tsconfig.json",
+    "test": "tsx --test tests/memtensor_newapi_models.test.ts",
+    "test:memtensor": "tsx --test tests/memtensor_newapi_models.test.ts"
   },
   "dependencies": {
     "@pararouter/shared": "*",

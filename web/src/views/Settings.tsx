@@ -14,9 +14,10 @@ export default function SettingsView() {
   const [securityMessage, setSecurityMessage] = React.useState('');
   const [securityError, setSecurityError] = React.useState('');
 
+  const isAdmin = localUser.role === 'admin';
   const tabs = [
     {id: 'profile', labelKey: 'settings.tabs.profile', icon: User},
-    {id: 'billing', labelKey: 'settings.tabs.billing', icon: CreditCard},
+    ...(!isAdmin ? [{id: 'billing', labelKey: 'settings.tabs.billing', icon: CreditCard}] : []),
     {id: 'routing', labelKey: 'settings.tabs.routing', icon: Sliders},
     {id: 'integrations', labelKey: 'settings.tabs.integrations', icon: Webhook},
     {id: 'security', labelKey: 'settings.tabs.security', icon: Shield},
@@ -108,7 +109,7 @@ export default function SettingsView() {
             </div>
           )}
 
-          {activeTab === 'billing' && (
+          {!isAdmin && activeTab === 'billing' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm p-8 flex flex-col md:flex-row items-center justify-between gap-8">
                 <div className="space-y-2 text-center md:text-left">

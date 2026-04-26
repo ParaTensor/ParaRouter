@@ -57,6 +57,7 @@ export async function initSchema() {
   const defaultLlmModels = [
     // OpenAI Models
     { id: 'gpt-5.4', name: 'gpt-5.4', provider: 'OpenAI', description: "OpenAI Flagship", category: 'Creative', context_length: 200000, global_pricing: { prompt: 2.50, completion: 15.00, cache_read: 0.25 }, score: 98.2, trend: 'up' },
+    { id: 'gpt-5.5', name: 'gpt-5.5', provider: 'OpenAI', description: "OpenAI Flagship", category: 'Creative', context_length: 200000, global_pricing: { prompt: 5.00, completion: 30.00, cache_read: 0.50 }, score: 99.2, trend: 'up' },
     { id: 'gpt-5.4-mini', name: 'gpt-5.4-mini', provider: 'OpenAI', description: "OpenAI Fast & Affordable", category: 'Coding', context_length: 200000, global_pricing: { prompt: 0.75, completion: 4.50, cache_read: 0.075 }, score: 92.1, trend: 'stable' },
     { id: 'gpt-5.4-nano', name: 'gpt-5.4-nano', provider: 'OpenAI', description: "OpenAI Lowest latency and cost", category: 'Coding', context_length: 200000, global_pricing: { prompt: 0.20, completion: 1.25, cache_read: 0.02 }, score: 85.5, trend: 'stable' },
     { id: 'gpt-5.4-pro', name: 'gpt-5.4-pro', provider: 'OpenAI', description: "OpenAI Professional", category: 'Creative', context_length: 200000, global_pricing: { prompt: 30.00, completion: 180.00 }, score: 98.5, trend: 'up' },

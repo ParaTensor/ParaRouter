@@ -2,16 +2,33 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { pool } from '../db';
 import {
-  fetchProviderSupportedModels,
+  fetchProviderSupportedModelsWithLog,
+  mapVendorModelNamesToGlobalIds,
   normalizeProviderBaseUrl,
   normalizeProviderId,
   providerBaseUrls,
+  type ProviderCatalogFetchLogEntry,
 } from '../utils';
 import { requireRole } from '../middleware/auth';
+import { runProviderHealthChecks } from '../provider_health';
 
 const router = Router();
 
-async function refreshProviderSupportedModels(provider: string) {
+type CatalogRefreshResult =
+  | { ok: true; count: number; fetch_log: ProviderCatalogFetchLogEntry[] }
+  | { ok: false; count: 0; error: string; fetch_log: ProviderCatalogFetchLogEntry[] };
+
+function normalizeCatalogModels(raw: unknown) {
+  if (!Array.isArray(raw)) return [] as string[];
+  return raw
+    .map((item) => String(item || '').trim())
+    .filter((item) => item.length > 0);
+}
+
+/** Fetches upstream /models (etc.) and persists only on success; does not clear existing catalog on failure. */
+async function refreshProviderModelCatalog(provider: string): Promise<CatalogRefreshResult> {
+  const emptyLog: ProviderCatalogFetchLogEntry[] = [];
+
   const { rows: accounts } = await pool.query(
     `SELECT id, base_url
      FROM provider_accounts
@@ -20,8 +37,12 @@ async function refreshProviderSupportedModels(provider: string) {
     [provider],
   );
   const account = accounts[0];
-  if (!account?.base_url) {
-    return { fetched: false, count: 0 };
+  if (!account) {
+    return { ok: false, count: 0, error: 'Provider not found', fetch_log: emptyLog };
+  }
+  const baseUrl = String(account.base_url || '').trim();
+  if (!baseUrl) {
+    return { ok: false, count: 0, error: 'Missing base URL', fetch_log: emptyLog };
   }
 
   const { rows: keys } = await pool.query(
@@ -34,38 +55,28 @@ async function refreshProviderSupportedModels(provider: string) {
   );
   const apiKey = String(keys[0]?.api_key || '').trim();
   if (!apiKey) {
-    await pool.query(
-      `UPDATE provider_accounts
-       SET supported_models = $2::jsonb,
-           supported_models_updated_at = NULL
-       WHERE id = $1`,
-      [provider, JSON.stringify([])],
-    );
-    return { fetched: false, count: 0 };
+    return { ok: false, count: 0, error: 'No active API key', fetch_log: emptyLog };
   }
 
-  try {
-    const supportedModels = await fetchProviderSupportedModels(account.base_url, apiKey);
-    await pool.query(
-      `UPDATE provider_accounts
-       SET supported_models = $2::jsonb,
-           supported_models_updated_at = $3,
-           updated_at = $3
-       WHERE id = $1`,
-      [provider, JSON.stringify(supportedModels), Date.now()],
-    );
-    return { fetched: true, count: supportedModels.length };
-  } catch (error) {
+  const { models, fetch_log, error } = await fetchProviderSupportedModelsWithLog(baseUrl, apiKey);
+  if (error) {
     console.warn(`Failed to refresh supported models for provider ${provider}:`, error);
-    await pool.query(
-      `UPDATE provider_accounts
-       SET supported_models = $2::jsonb,
-           supported_models_updated_at = NULL
-       WHERE id = $1`,
-      [provider, JSON.stringify([])],
-    );
-    return { fetched: false, count: 0 };
+    return { ok: false, count: 0, error: error || 'Failed to fetch model catalog', fetch_log };
   }
+
+  const { rows: globalRows } = await pool.query<{ id: string }>('SELECT id FROM llm_models');
+  const mapped = mapVendorModelNamesToGlobalIds(models, globalRows);
+
+  const now = Date.now();
+  await pool.query(
+    `UPDATE provider_accounts
+     SET supported_models = $2::jsonb,
+         supported_models_updated_at = $3,
+         updated_at = $3
+     WHERE id = $1`,
+    [provider, JSON.stringify(mapped), now],
+  );
+  return { ok: true, count: mapped.length, fetch_log };
 }
 
 router.get('/provider-types', requireRole('admin'), async (_req, res) => {
@@ -85,15 +96,44 @@ router.get('/provider-types', requireRole('admin'), async (_req, res) => {
 
 router.get('/provider-keys', requireRole('admin'), async (_req, res) => {
   try {
+    const { rows: stateRows } = await pool.query(
+      'SELECT current_version FROM pricing_state WHERE id = 1 LIMIT 1',
+    );
+    const currentVersion = String(stateRows[0]?.current_version || 'bootstrap');
     const { rows: accounts } = await pool.query(
       `SELECT id AS provider, status, provider_type, label, base_url, COALESCE(docs_url, '') AS docs_url,
               COALESCE(supported_models, '[]'::jsonb) AS supported_models, supported_models_updated_at
        FROM provider_accounts ORDER BY id ASC`
     );
     const { rows: keys } = await pool.query(
-      `SELECT id, provider_account_id, label, api_key, status
+          `SELECT id, provider_account_id, label, api_key, status,
+            COALESCE(supported_models, '[]'::jsonb) AS supported_models,
+            supported_models_updated_at,
+              COALESCE(health_status, 'unknown') AS health_status,
+              health_checked_at,
+              health_last_ok_at,
+              health_error,
+              health_fail_count,
+              health_alert_sent_at
        FROM provider_api_keys ORDER BY id ASC`
     );
+    const { rows: pricingRows } = await pool.query(
+      `SELECT provider_account_id, provider_key_id, model_id
+       FROM model_provider_pricings
+       WHERE version = $1 AND status = 'online'
+       ORDER BY provider_account_id ASC, provider_key_id ASC, is_top_provider DESC, input_price ASC NULLS LAST, model_id ASC`,
+      [currentVersion],
+    );
+
+    const keySupportedModels = new Map<string, string[]>();
+    for (const row of pricingRows) {
+      const mapKey = `${row.provider_account_id}::${row.provider_key_id}`;
+      const list = keySupportedModels.get(mapKey) || [];
+      if (!list.includes(row.model_id)) {
+        list.push(row.model_id);
+        keySupportedModels.set(mapKey, list);
+      }
+    }
 
     const result = accounts.map(acc => ({
       ...acc,
@@ -102,7 +142,17 @@ router.get('/provider-keys', requireRole('admin'), async (_req, res) => {
         id: k.id,
         label: k.label,
         key: k.api_key,
-        status: k.status
+        status: k.status,
+        health_status: k.health_status,
+        health_checked_at: k.health_checked_at,
+        health_last_ok_at: k.health_last_ok_at,
+        health_error: k.health_error,
+        health_fail_count: k.health_fail_count,
+        health_alert_sent_at: k.health_alert_sent_at,
+        supported_models: normalizeCatalogModels(k.supported_models).length > 0
+          ? normalizeCatalogModels(k.supported_models)
+          : (keySupportedModels.get(`${acc.provider}::${k.id}`) || []),
+        supported_models_updated_at: k.supported_models_updated_at,
       }))
     }));
     res.json(result);
@@ -111,6 +161,94 @@ router.get('/provider-keys', requireRole('admin'), async (_req, res) => {
     res.status(500).json({ error: String(error) });
   }
 });
+
+router.post('/provider-keys/:provider/health-check', requireRole('admin'), async (req, res) => {
+  try {
+    const provider = normalizeProviderId(req.params.provider || '');
+    const results = await runProviderHealthChecks(provider);
+    await pool.query("SELECT pg_notify('config_changed', 'provider_keys')");
+    res.json({ status: 'checked', provider, results });
+  } catch (error) {
+    console.error('API Error POST /provider-keys/:provider/health-check:', error);
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+router.post('/provider-keys/:provider/:keyId/refresh-model-catalog', requireRole('admin'), async (req, res) => {
+  try {
+    const provider = normalizeProviderId(req.params.provider || '');
+    const keyId = String(req.params.keyId || '').trim();
+    if (!provider || !keyId) {
+      return res.status(400).json({ error: 'provider and keyId are required' });
+    }
+
+    const { rows: keyRows } = await pool.query(
+      `SELECT k.api_key, a.base_url
+       FROM provider_api_keys k
+       JOIN provider_accounts a ON a.id = k.provider_account_id
+       WHERE k.id = $1 AND k.provider_account_id = $2 AND k.status = 'active'
+       LIMIT 1`,
+      [keyId, provider],
+    );
+    const row = keyRows[0];
+    if (!row) {
+      return res.status(404).json({ error: 'provider key not found' });
+    }
+
+    const { models, fetch_log, error } = await fetchProviderSupportedModelsWithLog(String(row.base_url || ''), String(row.api_key || ''));
+    if (error) {
+      return res.status(400).json({ error, fetch_log });
+    }
+
+    const { rows: globalRows } = await pool.query<{ id: string }>('SELECT id FROM llm_models');
+    const mapped = mapVendorModelNamesToGlobalIds(models, globalRows);
+
+    const now = Date.now();
+    await pool.query(
+      `UPDATE provider_api_keys
+       SET supported_models = $2::jsonb,
+           supported_models_updated_at = $3,
+           updated_at = $3
+       WHERE id = $1 AND provider_account_id = $4`,
+      [keyId, JSON.stringify(mapped), now, provider],
+    );
+    await pool.query("SELECT pg_notify('config_changed', 'provider_keys')");
+    res.json({
+      status: 'refreshed',
+      provider,
+      key_id: keyId,
+      supported_models_count: mapped.length,
+      fetch_log,
+    });
+  } catch (error) {
+    console.error('API Error POST /provider-keys/:provider/:keyId/refresh-model-catalog:', error);
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+router.post(
+  '/provider-keys/:provider/refresh-model-catalog',
+  requireRole('admin'),
+  async (req, res) => {
+    try {
+      const provider = normalizeProviderId(req.params.provider || '');
+      const result = await refreshProviderModelCatalog(provider);
+      if (!result.ok) {
+        const status = result.error === 'Provider not found' ? 404 : 400;
+        return res.status(status).json({ error: result.error, fetch_log: result.fetch_log });
+      }
+      await pool.query("SELECT pg_notify('config_changed', 'provider_keys')");
+      res.json({
+        status: 'refreshed',
+        supported_models_count: result.count,
+        fetch_log: result.fetch_log,
+      });
+    } catch (error) {
+      console.error('API Error POST /provider-keys/:provider/refresh-model-catalog:', error);
+      res.status(500).json({ error: String(error) });
+    }
+  },
+);
 
 router.put('/provider-keys/:provider', requireRole('admin'), async (req, res) => {
   try {
@@ -131,6 +269,7 @@ router.put('/provider-keys/:provider', requireRole('admin'), async (req, res) =>
     const nowDate = new Date(now);
 
     const client = await pool.connect();
+    const savedKeyMeta: { id: string; label: string }[] = [];
     try {
       await client.query('BEGIN');
 
@@ -167,19 +306,57 @@ router.put('/provider-keys/:provider', requireRole('admin'), async (req, res) =>
         await client.query(`DELETE FROM provider_api_keys WHERE provider_account_id = $1`, [provider]);
       }
 
+      const catalogLists = keys.map((k) => normalizeCatalogModels(k.supported_models));
+      const allCatalogIds = new Set<string>();
+      for (const list of catalogLists) {
+        for (const id of list) allCatalogIds.add(id);
+      }
+      if (allCatalogIds.size > 0) {
+        const { rows: foundRows } = await client.query('SELECT id FROM llm_models WHERE id = ANY($1::text[])', [
+          [...allCatalogIds],
+        ]);
+        const found = new Set((foundRows as { id: string }[]).map((r) => r.id));
+        const missing = [...allCatalogIds].filter((id) => !found.has(id));
+        if (missing.length > 0) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            error: 'Each supported_models entry must match a global model id in llm_models',
+            missing_global_model_ids: missing,
+          });
+        }
+      }
+
       for (const k of keys) {
         const kid = k.id || crypto.randomUUID();
         await client.query(
-          `INSERT INTO provider_api_keys (id, provider_account_id, label, api_key, status, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6)
+          `INSERT INTO provider_api_keys (id, provider_account_id, label, api_key, status, supported_models, supported_models_updated_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
            ON CONFLICT (id)
            DO UPDATE SET
             label = EXCLUDED.label,
             api_key = CASE WHEN EXCLUDED.api_key IS NOT NULL AND EXCLUDED.api_key != '' THEN EXCLUDED.api_key ELSE provider_api_keys.api_key END,
             status = EXCLUDED.status,
+            supported_models = CASE
+              WHEN EXCLUDED.supported_models IS NOT NULL THEN EXCLUDED.supported_models
+              ELSE provider_api_keys.supported_models
+            END,
+            supported_models_updated_at = CASE
+              WHEN EXCLUDED.supported_models IS NOT NULL THEN EXCLUDED.supported_models_updated_at
+              ELSE provider_api_keys.supported_models_updated_at
+            END,
             updated_at = EXCLUDED.updated_at`,
-          [kid, provider, k.label || 'Default', k.key || '', k.status || 'active', now]
+          [
+            kid,
+            provider,
+            k.label || 'Default',
+            k.key || '',
+            k.status || 'active',
+            JSON.stringify(normalizeCatalogModels(k.supported_models)),
+            k.supported_models_updated_at || null,
+            now,
+          ]
         );
+        savedKeyMeta.push({ id: kid, label: String(k.label || 'Default') });
       }
 
       await client.query(
@@ -213,12 +390,10 @@ router.put('/provider-keys/:provider', requireRole('admin'), async (req, res) =>
       client.release();
     }
 
-    const refreshResult = await refreshProviderSupportedModels(provider);
-
     // Notify Gateway to refresh cache
     await pool.query("SELECT pg_notify('config_changed', 'provider_keys')");
     await pool.query("SELECT pg_notify('config_changed', 'provider_types')");
-    res.json({ status: 'saved', supported_models_fetched: refreshResult.fetched, supported_models_count: refreshResult.count });
+    res.json({ status: 'saved', keys: savedKeyMeta });
   } catch (error) {
     console.error('API Error /provider-keys/:provider:', error);
     res.status(500).json({ error: String(error) });

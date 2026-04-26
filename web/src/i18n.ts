@@ -4,9 +4,10 @@ import {initReactI18next} from 'react-i18next';
 const SUPPORTED_LOCALES = ['en', 'zh', 'ja', 'ko'] as const;
 
 type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
-type TranslationModule = {default: Record<string, unknown>} | Record<string, unknown>;
+type TranslationResource = Record<string, unknown>;
+type TranslationModule = {default: TranslationResource} | TranslationResource;
 const loadedLocales = new Set<SupportedLocale>();
-const stagedResources: Partial<Record<SupportedLocale, {translation: Record<string, unknown>}>> = {};
+const stagedResources: Partial<Record<SupportedLocale, {translation: TranslationResource}>> = {};
 
 const localeLoaders: Record<SupportedLocale, () => Promise<TranslationModule>> = {
   en: () => import('./locales/en.json'),
@@ -51,7 +52,9 @@ async function loadLocale(locale: SupportedLocale) {
   }
 
   const loadedModule = await localeLoaders[locale]();
-  const translation = 'default' in loadedModule ? loadedModule.default : loadedModule;
+  const translation: TranslationResource = 'default' in loadedModule
+    ? (loadedModule.default as TranslationResource)
+    : (loadedModule as TranslationResource);
   if (initialized) {
     i18n.addResourceBundle(locale, 'translation', translation, true, true);
   } else {

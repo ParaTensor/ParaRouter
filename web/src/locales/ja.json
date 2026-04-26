@@ -88,7 +88,32 @@
     "start_sync": "同期を開始"
   },
   "providers": {
-    "unknown_error": "不明なエラー"
+    "default_key_label": "api key {{n}}",
+    "unknown_error": "不明なエラー",
+    "catalog_empty": "上流のモデル一覧はまだありません",
+    "catalog_synced_zero": "同期済みですがモデル id を 0 件抽出",
+    "catalog_synced_zero_hint": "上流から応答はありますが id を認識できませんでした。料金はグローバル一覧にフォールバックします。",
+    "catalog_synced": "上流モデル {{count}} 件を同期済み",
+    "catalog_updated": "更新: {{time}}",
+    "catalog_fallback_hint": "カードから上流モデル一覧を手動同期するまで、料金はグローバルモデル一覧にフォールバックします。",
+    "catalog_sync_reminder": "保存しました。料金チェック用に上流のモデル一覧が必要なときは、カードの「モデル一覧を同期」から実行してください。",
+    "catalog_sync_hint_modal": "保存後、必要に応じて編集ダイアログ内の各 API キーでモデル一覧を同期してください。自動では取得しません。",
+    "catalog_models_list": "対応モデル一覧",
+    "key_models_count": "モデル {{count}} 件",
+    "catalog_fetch_debug": "直近の同期：リクエストログとレスポンス抜粋",
+    "sync_requires_save_hint": "新しいチャネルは先に「更新」で保存してから、「モデル一覧を同期」を使えます。",
+    "refresh_catalog": "モデル一覧を同期",
+    "refresh_catalog_success": "上流から {{count}} 件のモデルを同期しました。",
+    "refresh_catalog_timeout": "同期がタイムアウトしました。Hub が起動し、このページから /api 経由で Hub に届くか確認してください（開発時は Vite が /api をポート 3322 にプロキシします）。",
+    "dismiss_reminder": "閉じる",
+    "provider_model_catalog_hint": "このプロバイダーでは {{count}} 件の上流モデルを同期済みです。入力候補から選ぶか、引き続き手動で入力できます。",
+    "provider_model_mismatch_warning": "このプロバイダーは {{count}} 件の上流モデルを返していますが、{{model}} はその一覧に含まれていません。この価格設定は保存できますが、正確な上流モデル id を使うまではリクエストが失敗する可能性があります。",
+    "supported_models_placeholder": "1 行に 1 つずつ model id を入力します。例:\nclaude-opus-4-6\ngpt-5.4",
+    "cancel": "戻る",
+    "saving": "保存中…",
+    "update_provider": "更新",
+    "create_provider_btn": "作成",
+    "delete": "削除"
   },
   "rankings": {
     "empty_leaderboard": "ランキングにモデルが見つかりません。"

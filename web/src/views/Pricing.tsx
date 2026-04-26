@@ -9,6 +9,7 @@ import {
   PricingRow, PublishedPricingRow, ProviderKeyRow, PricingTableRow,
   PricingPreview, SortKey, PriceRange
 } from './pricing/types';
+import { pricingEdit, usePricingEditUi } from './pricing/pricingEditUiStore';
 import { useTranslation } from "react-i18next";
 
 const rowKey = (row: {model: string; provider_account_id?: string | null; provider_key_id?: string}) => 
@@ -52,33 +53,33 @@ export default function PricingView() {
   const [sortDesc, setSortDesc] = React.useState(true);
   const [currentPage, setCurrentPage] = React.useState(1);
 
-  const [drawerOpen, setDrawerOpen] = React.useState(false);
+  const {
+    drawerOpen,
+    providerDrawerOpen,
+    formPriceMode,
+    model,
+    providerAccountId,
+    inputCost,
+    outputCost,
+    cacheReadCost,
+    cacheWriteCost,
+    reasoningCost,
+    inputPrice,
+    outputPrice,
+    cacheReadPrice,
+    cacheWritePrice,
+    reasoningPrice,
+    contextLength,
+    latencyMs,
+    markupRate,
+    providerKeyId,
+    discountRate,
+  } = usePricingEditUi();
 
-  const [formPriceMode, setFormPriceMode] = React.useState<'fixed' | 'markup'>('fixed');
-  const [model, setModel] = React.useState('');
-  const [providerModelId, setProviderModelId] = React.useState('');
-  const [modelQuery, setModelQuery] = React.useState('');
-  const [providerAccountId, setProviderAccountId] = React.useState('');
-  const [inputCost, setInputCost] = React.useState('');
-  const [outputCost, setOutputCost] = React.useState('');
-  const [cacheReadCost, setCacheReadCost] = React.useState('');
-  const [cacheWriteCost, setCacheWriteCost] = React.useState('');
-  const [reasoningCost, setReasoningCost] = React.useState('');
-  const [inputPrice, setInputPrice] = React.useState('');
-  const [outputPrice, setOutputPrice] = React.useState('');
-  const [cacheReadPrice, setCacheReadPrice] = React.useState('');
-  const [cacheWritePrice, setCacheWritePrice] = React.useState('');
-  const [reasoningPrice, setReasoningPrice] = React.useState('');
-  const [contextLength, setContextLength] = React.useState('');
-  const [latencyMs, setLatencyMs] = React.useState('');
-  const [markupRate, setMarkupRate] = React.useState('');
-  const [providerKeyId, setProviderKeyId] = React.useState('');
   const [providerKeyRows, setProviderKeyRows] = React.useState<ProviderKeyRow[]>([]);
-  const [providerDrawerOpen, setProviderDrawerOpen] = React.useState(false);
 
   const [preview, setPreview] = React.useState<PricingPreview | null>(null);
   const [globalModels, setGlobalModels] = React.useState<any[]>([]);
-  const [discountRate, setDiscountRate] = React.useState('1.0');
   const [notification, setNotification] = React.useState<{message: string; type: 'success' | 'error'} | null>(null);
 
   const showNotification = (msg: string, type: 'success' | 'error' = 'success') => {
@@ -128,100 +129,54 @@ export default function PricingView() {
   }, [search, providerFilter, statusFilter, priceRange]);
 
   const openCreateDrawer = () => {
-    setFormPriceMode('fixed');
-    setModel('');
-    setProviderModelId('');
-    setModelQuery('');
-    const allKeys = providerKeyRows.flatMap(p => (p.keys || []).filter(k => !!k.id).map(k => ({ id: k.id, provider: p.provider })));
-    if (allKeys.length > 0) {
-      const randomKey = allKeys[Math.floor(Math.random() * allKeys.length)];
-      setProviderKeyId(randomKey.id as string);
-      setProviderAccountId(randomKey.provider);
-    } else {
-      setProviderKeyId('');
-      setProviderAccountId('');
-    }
-    setInputCost('');
-    setOutputCost('');
-    setCacheReadCost('');
-    setCacheWriteCost('');
-    setReasoningCost('');
-    setInputPrice('');
-    setOutputPrice('');
-    setCacheReadPrice('');
-    setCacheWritePrice('');
-    setReasoningPrice('');
-    setContextLength('');
-    setLatencyMs('');
-    setMarkupRate('');
-    setProviderKeyId('');
-    setDrawerOpen(true);
+    pricingEdit.openCreateFromKeys(providerKeyRows);
   };
 
   const openProviderDrawer = () => {
-    setProviderDrawerOpen(true);
+    pricingEdit.setProviderDrawerOpen(true);
   };
 
   const handleProviderSuccess = (providerSlug: string) => {
-    setProviderAccountId(providerSlug);
+    pricingEdit.setProviderAccountId(providerSlug);
     loadAll(false);
   };
 
   const openEditDrawer = (row: PricingTableRow) => {
-    const numberText = (value?: number | null) => (typeof value === 'number' ? String(value) : '');
-    setFormPriceMode('fixed');
-    setModel(row.model);
-    setProviderModelId(row.provider_model_id || '');
-    setModelQuery('');
-    setProviderAccountId(row.provider_account_id || '');
-    setInputCost(numberText(row.input_cost));
-    setOutputCost(numberText(row.output_cost));
-    setCacheReadCost(numberText(row.cache_read_cost));
-    setCacheWriteCost(numberText(row.cache_write_cost));
-    setReasoningCost(numberText(row.reasoning_cost));
-    setInputPrice(numberText(row.input_price));
-    setOutputPrice(numberText(row.output_price));
-    setCacheReadPrice(numberText(row.cache_read_price));
-    setCacheWritePrice(numberText(row.cache_write_price));
-    setReasoningPrice(numberText(row.reasoning_price));
-    setContextLength(numberText(row.context_length));
-    setLatencyMs(numberText(row.latency_ms));
-    setMarkupRate(numberText(row.markup_rate));
-    setProviderKeyId(row.provider_key_id || '');
-    setDrawerOpen(true);
+    pricingEdit.openEditFromRow(row);
   };
 
   const saveDraft = async (rates?: AppliedRateFields): Promise<boolean> => {
+    const s = pricingEdit.get();
     const mode = 'fixed';
     const r = rates ?? {
-      inputCost,
-      outputCost,
-      cacheReadCost,
-      cacheWriteCost,
-      reasoningCost,
-      inputPrice,
-      outputPrice,
-      cacheReadPrice,
-      cacheWritePrice,
-      reasoningPrice,
+      inputCost: s.inputCost,
+      outputCost: s.outputCost,
+      cacheReadCost: s.cacheReadCost,
+      cacheWriteCost: s.cacheWriteCost,
+      reasoningCost: s.reasoningCost,
+      inputPrice: s.inputPrice,
+      outputPrice: s.outputPrice,
+      cacheReadPrice: s.cacheReadPrice,
+      cacheWritePrice: s.cacheWritePrice,
+      reasoningPrice: s.reasoningPrice,
     };
     const payload: Record<string, unknown> = {
-      model: model.trim(),
-      provider_model_id: providerModelId ? providerModelId.trim() : null,
-      provider_account_id: providerAccountId,
+      model: s.model.trim(),
+      provider_model_id: null,
+      provider_account_id: s.providerAccountId,
       price_mode: mode,
       currency: 'USD',
-      context_length: contextLength ? Number(contextLength) : null,
-      latency_ms: latencyMs ? Number(latencyMs) : null,
+      context_length: s.contextLength ? Number(s.contextLength) : null,
+      latency_ms: s.latencyMs ? Number(s.latencyMs) : null,
       reasoning_price: r.reasoningPrice ? Number(r.reasoningPrice) : null,
       status: 'online',
-      provider_key_id: providerKeyId || '',
+      provider_key_id: s.providerKeyId || '',
     };
 
-    if (!payload.model) {
+    if (!s.model.trim()) {
       return false;
     }
-    if (!providerAccountId) {
+    if (!s.providerAccountId) {
       return false;
     }
 
@@ -404,35 +359,33 @@ export default function PricingView() {
 
       <ProviderAccountModal 
         isOpen={providerDrawerOpen}
-        onClose={() => setProviderDrawerOpen(false)}
+        onClose={() => pricingEdit.closeProviderDrawer()}
         onSuccess={handleProviderSuccess}
       />
 
       <EditPriceModal 
         isOpen={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        model={model} setModel={setModel}
-        providerModelId={providerModelId} setProviderModelId={setProviderModelId}
-        modelQuery={modelQuery} setModelQuery={setModelQuery}
-        providerAccountId={providerAccountId} setProviderAccountId={setProviderAccountId}
-        providerKeyId={providerKeyId} setProviderKeyId={setProviderKeyId}
-        formPriceMode={formPriceMode} setFormPriceMode={setFormPriceMode}
-        inputCost={inputCost} setInputCost={setInputCost}
-        outputCost={outputCost} setOutputCost={setOutputCost}
-        cacheReadCost={cacheReadCost} setCacheReadCost={setCacheReadCost}
-        cacheWriteCost={cacheWriteCost} setCacheWriteCost={setCacheWriteCost}
-        reasoningCost={reasoningCost} setReasoningCost={setReasoningCost}
-        inputPrice={inputPrice} setInputPrice={setInputPrice}
-        outputPrice={outputPrice} setOutputPrice={setOutputPrice}
-        cacheReadPrice={cacheReadPrice} setCacheReadPrice={setCacheReadPrice}
-        cacheWritePrice={cacheWritePrice} setCacheWritePrice={setCacheWritePrice}
-        reasoningPrice={reasoningPrice} setReasoningPrice={setReasoningPrice}
-        contextLength={contextLength} setContextLength={setContextLength}
-        latencyMs={latencyMs} setLatencyMs={setLatencyMs}
-        markupRate={markupRate} setMarkupRate={setMarkupRate}
+        onClose={() => pricingEdit.closeEditDrawer()}
+        model={model} setModel={pricingEdit.setModel}
+        providerAccountId={providerAccountId} setProviderAccountId={pricingEdit.setProviderAccountId}
+        providerKeyId={providerKeyId} setProviderKeyId={pricingEdit.setProviderKeyId}
+        formPriceMode={formPriceMode} setFormPriceMode={pricingEdit.setFormPriceMode}
+        inputCost={inputCost} setInputCost={pricingEdit.setInputCost}
+        outputCost={outputCost} setOutputCost={pricingEdit.setOutputCost}
+        cacheReadCost={cacheReadCost} setCacheReadCost={pricingEdit.setCacheReadCost}
+        cacheWriteCost={cacheWriteCost} setCacheWriteCost={pricingEdit.setCacheWriteCost}
+        reasoningCost={reasoningCost} setReasoningCost={pricingEdit.setReasoningCost}
+        inputPrice={inputPrice} setInputPrice={pricingEdit.setInputPrice}
+        outputPrice={outputPrice} setOutputPrice={pricingEdit.setOutputPrice}
+        cacheReadPrice={cacheReadPrice} setCacheReadPrice={pricingEdit.setCacheReadPrice}
+        cacheWritePrice={cacheWritePrice} setCacheWritePrice={pricingEdit.setCacheWritePrice}
+        reasoningPrice={reasoningPrice} setReasoningPrice={pricingEdit.setReasoningPrice}
+        contextLength={contextLength} setContextLength={pricingEdit.setContextLength}
+        latencyMs={latencyMs} setLatencyMs={pricingEdit.setLatencyMs}
+        markupRate={markupRate} setMarkupRate={pricingEdit.setMarkupRate}
         providerKeyRows={providerKeyRows}
         globalModels={globalModels}
-        discountRate={discountRate} setDiscountRate={setDiscountRate}
+        discountRate={discountRate} setDiscountRate={pricingEdit.setDiscountRate}
         providers={providers}
         busy={busy}
         handlePreview={handlePreview}

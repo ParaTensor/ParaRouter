@@ -37,7 +37,7 @@ export type ProviderKeyRow = {
   provider_type?: string;
   supported_models?: string[];
   supported_models_updated_at?: number | null;
-  keys?: { id?: string; label: string }[];
+  keys?: { id?: string; label: string; supported_models?: string[] }[];
 };
 
 export type PricingTableRow = PricingRow & {
