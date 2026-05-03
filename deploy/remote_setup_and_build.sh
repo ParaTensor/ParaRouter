@@ -205,6 +205,10 @@ if [ -n "$RESEND_API_KEY" ]; then
     echo "Updated RESEND_API_KEY in $ENV_FILE"
 fi
 
+# 8.7 Run database schema migration before service startup
+echo "Applying database schema migration..."
+sudo -u postgres psql -d pararouter -v ON_ERROR_STOP=1 -f "$PROJECT_DIR/packages/shared/schema.sql"
+
 # 9. Start services
 echo "Starting services..."
 sudo systemctl enable $HUB_SERVICE

@@ -122,6 +122,12 @@ CREATE TABLE IF NOT EXISTS activity (
   provider_key_id TEXT
 );
 
+-- Ensure existing deployments receive new columns before index creation.
+ALTER TABLE activity ADD COLUMN IF NOT EXISTS cost TEXT;
+ALTER TABLE activity ADD COLUMN IF NOT EXISTS request_correlation_id TEXT;
+ALTER TABLE activity ADD COLUMN IF NOT EXISTS provider_account_id TEXT;
+ALTER TABLE activity ADD COLUMN IF NOT EXISTS provider_key_id TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_activity_user_id ON activity(user_id);
 CREATE INDEX IF NOT EXISTS idx_activity_request_correlation_id ON activity(request_correlation_id);
 CREATE INDEX IF NOT EXISTS idx_activity_provider_account_id ON activity(provider_account_id);
@@ -141,6 +147,10 @@ CREATE TABLE IF NOT EXISTS stream_observations (
   stream_duration_ms INTEGER NOT NULL DEFAULT 0,
   completed_normally BOOLEAN NOT NULL DEFAULT false
 );
+
+ALTER TABLE stream_observations ADD COLUMN IF NOT EXISTS request_correlation_id TEXT;
+ALTER TABLE stream_observations ADD COLUMN IF NOT EXISTS provider_account_id TEXT;
+ALTER TABLE stream_observations ADD COLUMN IF NOT EXISTS provider_key_id TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_stream_observations_timestamp ON stream_observations(timestamp);
 CREATE INDEX IF NOT EXISTS idx_stream_observations_model ON stream_observations(requested_model);
