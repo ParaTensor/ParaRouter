@@ -447,7 +447,9 @@ export function globalModelIdMatchesKeyCatalog(globalId: string, catalog: string
 
 export function mapPricingRow(row: any) {
   return {
-    model: row.model_id,
+    model: row.public_model_id || row.model_id,
+    global_model_id: row.model_id,
+    public_model_id: row.public_model_id || null,
     provider_account_id: row.provider_account_id,
     provider_key_id: row.provider_key_id,
     provider_model_id: row.provider_model_id,

@@ -3,7 +3,7 @@ import { Zap } from 'lucide-react';
 import { Select } from '../../components/Select';
 import { Dialog, DialogBackdrop, DialogPanel } from '@headlessui/react';
 import { useNavigate } from 'react-router-dom';
-import { ProviderKeyRow, DrawerTab, PricingPreview, PricingRow } from './types';
+import { ProviderKeyRow, DrawerTab, PricingPreview, PricingRow, PublishedPricingRow } from './types';
 import { useTranslation } from "react-i18next";
 import { cn } from '../../lib/utils';
 
@@ -132,6 +132,27 @@ export type AppliedRateFields = {
   reasoningPrice: string;
 };
 
+function parseOfficialPrice(value?: string | number | null) {
+  if (typeof value === 'number') return value;
+  if (typeof value !== 'string') return 0;
+  const parsed = parseFloat(value.replace(/[^0-9.]/g, ''));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function deriveMultiplier(primaryValue: string, secondaryValue: string, primaryBase: number, secondaryBase: number) {
+  const primary = parseOfficialPrice(primaryValue);
+  if (primary > 0 && primaryBase > 0) {
+    return parseFloat((primary / primaryBase).toFixed(2)).toString();
+  }
+
+  const secondary = parseOfficialPrice(secondaryValue);
+  if (secondary > 0 && secondaryBase > 0) {
+    return parseFloat((secondary / secondaryBase).toFixed(2)).toString();
+  }
+
+  return '1.0';
+}
+
 function resolveGlobalModel(modelId: string, globalModels: any[]) {
   return globalModels.find((m) => m.id === modelId.trim());
 }
@@ -194,8 +215,14 @@ export function mergeAppliedRates(
 interface EditPriceModalProps {
   isOpen: boolean;
   onClose: () => void;
+  status: 'online' | 'paused' | 'offline';
+  setStatus: (status: 'online' | 'paused' | 'offline') => void;
   model: string;
   setModel: (m: string) => void;
+  publicModelId: string;
+  setPublicModelId: (m: string) => void;
+  providerModelId: string;
+  setProviderModelId: (m: string) => void;
   providerAccountId: string;
   setProviderAccountId: (id: string) => void;
   providerKeyId: string;
@@ -239,11 +266,15 @@ interface EditPriceModalProps {
   handlePublish: () => Promise<boolean>;
   preview: PricingPreview | null;
   draft: PricingRow[];
+  published: PublishedPricingRow[];
 }
 
 export default function EditPriceModal({
   isOpen, onClose,
+  status, setStatus,
   model, setModel,
+  publicModelId, setPublicModelId,
+  providerModelId, setProviderModelId,
   providerAccountId, setProviderAccountId, providerKeyId, setProviderKeyId,
   formPriceMode, setFormPriceMode,
   inputCost, setInputCost, outputCost, setOutputCost,
@@ -254,7 +285,7 @@ export default function EditPriceModal({
   reasoningPrice, setReasoningPrice, contextLength, setContextLength, latencyMs, setLatencyMs,
   markupRate, setMarkupRate,
   providerKeyRows, globalModels, discountRate, setDiscountRate, providers, busy,
-  handlePreview, saveDraft, handlePublish, preview, draft
+  handlePreview, saveDraft, handlePublish, preview, draft, published
 }: EditPriceModalProps) {
     const { t } = useTranslation();
   const navigate = useNavigate();
@@ -300,30 +331,82 @@ export default function EditPriceModal({
     return () => document.removeEventListener('keydown', onKey);
   }, [isOpen, onClose]);
 
+  const lastRateSeedRef = React.useRef('');
   React.useEffect(() => {
-    if (isOpen) {
-      if (!model) {
-        setCostMultiplier('1.0');
-        setSalesMultiplier('1.0');
-        setActivePriceView('sales');
-      }
-    } else {
+    if (!isOpen) {
+      setCostMultiplier('1.0');
+      setSalesMultiplier('1.0');
+      setActivePriceView('sales');
+      lastRateSeedRef.current = '';
       // Reset ref when closed to force recalculation if the same model is opened again
       lastPopRef.current = { model: '', providerKeyId: '' };
-    }
-  }, [isOpen, model]);
-
-  const lastPopRef = React.useRef({ model: '', providerKeyId: '' });
-  React.useEffect(() => {
-    if (model === lastPopRef.current.model && providerKeyId === lastPopRef.current.providerKeyId) {
       return;
     }
-    lastPopRef.current = { model, providerKeyId };
+
+    const seed = [model.trim(), providerAccountId.trim(), providerKeyId.trim(), globalModels.length].join('::');
+    if (seed === lastRateSeedRef.current) {
+      return;
+    }
+
+    setActivePriceView('sales');
+
+    const officialPricing = resolveGlobalModel(model, globalModels)?.pricing;
+    if (!officialPricing) {
+      setCostMultiplier('1.0');
+      setSalesMultiplier('1.0');
+      lastRateSeedRef.current = seed;
+      return;
+    }
+
+    const promptBase = parseOfficialPrice(officialPricing.prompt);
+    const completionBase = parseOfficialPrice(officialPricing.completion);
+
+    setCostMultiplier(deriveMultiplier(inputCost, outputCost, promptBase, completionBase));
+    setSalesMultiplier(deriveMultiplier(inputPrice, outputPrice, promptBase, completionBase));
+    lastRateSeedRef.current = seed;
+  }, [
+    globalModels,
+    inputCost,
+    inputPrice,
+    isOpen,
+    model,
+    outputCost,
+    outputPrice,
+    providerAccountId,
+    providerKeyId,
+  ]);
+
+  const lastPopRef = React.useRef({ model: '', providerKeyId: '', providerAccountId: '' });
+  React.useEffect(() => {
+    if (!isOpen) {
+      lastPopRef.current = { model: '', providerKeyId: '', providerAccountId: '' };
+      return;
+    }
+
+    if (
+      model === lastPopRef.current.model &&
+      providerKeyId === lastPopRef.current.providerKeyId &&
+      providerAccountId === lastPopRef.current.providerAccountId
+    ) {
+      return;
+    }
+    lastPopRef.current = { model, providerKeyId, providerAccountId };
 
     if (!model || !providerKeyId) return;
 
-    const existing = draft.find(d => d.model === model && d.provider_key_id === providerKeyId);
+    const matchingRow = (d: PricingRow) => {
+      const draftGlobalModelId = (d.global_model_id || d.model || '').trim();
+      return (
+        draftGlobalModelId === model &&
+        d.provider_key_id === providerKeyId &&
+        (d.provider_account_id || '') === providerAccountId
+      );
+    };
+
+    const existing = draft.find(matchingRow) || published.find(matchingRow);
     if (existing) {
+      const existingPublicModelId = (existing.public_model_id || '').trim();
+      const existingModelId = ((existing.global_model_id || existing.model) || model).trim();
       setFormPriceMode(existing.price_mode as 'fixed' | 'markup');
       const numTxt = (val?: number | null) => (typeof val === 'number' ? String(val) : '');
       setInputCost(numTxt(existing.input_cost));
@@ -336,36 +419,30 @@ export default function EditPriceModal({
       setCacheReadPrice(numTxt(existing.cache_read_price));
       setCacheWritePrice(numTxt(existing.cache_write_price));
       setReasoningPrice(numTxt(existing.reasoning_price));
+      setPublicModelId(
+        existingPublicModelId && existingPublicModelId !== existingModelId
+          ? existingPublicModelId
+          : ''
+      );
+      setProviderModelId(existing.provider_model_id || '');
       setContextLength(numTxt(existing.context_length));
       setLatencyMs(numTxt(existing.latency_ms));
       setMarkupRate(numTxt(existing.markup_rate));
-
-      // Calculate multipliers if global pricing is available
-      const gm = globalModels.find((m) => m.id === model.trim());
-      if (gm?.pricing) {
-        const parse = (str?: string | number) => typeof str === 'string' ? parseFloat(str.replace(/[^0-9.]/g, '')) : (str || 0);
-        const pPrompt = parse(gm.pricing.prompt);
-        const pComp = parse(gm.pricing.completion);
-
-        if (existing.input_cost && pPrompt) {
-          setCostMultiplier(parseFloat((existing.input_cost / pPrompt).toFixed(2)).toString());
-        } else if (existing.output_cost && pComp) {
-          setCostMultiplier(parseFloat((existing.output_cost / pComp).toFixed(2)).toString());
-        }
-
-        if (existing.input_price && pPrompt) {
-          setSalesMultiplier(parseFloat((existing.input_price / pPrompt).toFixed(2)).toString());
-        } else if (existing.output_price && pComp) {
-          setSalesMultiplier(parseFloat((existing.output_price / pComp).toFixed(2)).toString());
-        }
-      }
+    } else {
+      setPublicModelId('');
+      setProviderModelId('');
     }
   }, [
-    model, providerKeyId, draft,
+    draft,
+    isOpen,
+    model,
+    providerAccountId,
+    providerKeyId,
+    published,
     setFormPriceMode, setInputCost, setOutputCost, setCacheReadCost,
     setCacheWriteCost, setReasoningCost, setInputPrice, setOutputPrice,
     setCacheReadPrice, setCacheWritePrice, setReasoningPrice,
-    setContextLength, setLatencyMs, setMarkupRate, globalModels
+    setPublicModelId, setProviderModelId, setContextLength, setLatencyMs, setMarkupRate
   ]);
 
   const validateForm = (rates: AppliedRateFields) => {
@@ -377,7 +454,6 @@ export default function EditPriceModal({
       setFormError(t('editpricemodal.error_model_registry'));
       return false;
     }
-
     // Check key
     if (!providerKeyId) {
       setFormError(t('editpricemodal.error_key_required'));
@@ -463,6 +539,8 @@ export default function EditPriceModal({
     setReasoningPrice(next.reasoningPrice);
   };
 
+  const effectivePublicModelId = publicModelId.trim() || model.trim();
+
   const hasOfficialPricing = Boolean(resolveGlobalModel(model, globalModels)?.pricing);
 
   // Using Headless UI Dialog for scroll lock management now
@@ -490,7 +568,7 @@ export default function EditPriceModal({
           <div className="flex-1 flex flex-col min-w-0 shrink-0">
             <div className="px-5 py-3 space-y-3">
                 <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('editpricemodal.cost_channel_key')}</label>
                       <Select
@@ -513,22 +591,33 @@ export default function EditPriceModal({
                     </div>
 
                     <div className="space-y-1.5">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('pricingtable.status')}</label>
+                      <Select
+                        className="[&_button]:h-10 [&_button]:rounded-lg [&_button]:border-zinc-200 [&_button]:focus:ring-2 [&_button]:focus:ring-purple-500/30 [&_button]:focus:ring-offset-0 [&_button]:focus:border-purple-500"
+                        value={status}
+                        onChange={(val) => setStatus(val as 'online' | 'paused' | 'offline')}
+                        options={[
+                          { value: 'online', label: t('pricingtable.online') },
+                          { value: 'paused', label: t('pricingtable.paused') },
+                          { value: 'offline', label: t('pricingtable.offline') },
+                        ]}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
                       <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('editpricemodal.global_model_label')}</label>
                       <Select
                         className="[&_button]:h-10 [&_button]:rounded-lg [&_button]:border-zinc-200 [&_button]:focus:ring-2 [&_button]:focus:ring-purple-500/30 [&_button]:focus:ring-offset-0 [&_button]:focus:border-purple-500"
                         value={model}
                         onChange={(val) => {
+                          const currentPublicModelId = publicModelId.trim();
+                          const currentModelId = model.trim();
                           setModel(val);
+                          if (!currentPublicModelId || currentPublicModelId === currentModelId) {
+                            setPublicModelId('');
+                          }
                           applyRates(val, costMultiplier, salesMultiplier);
                           const gm = globalModels.find((m) => m.id === val);
-                          if (gm?.pricing) {
-                            const parse = (str?: string) => (str ? String(parseFloat(str.replace(/[^0-9.]/g, ''))) : '');
-                            setInputPrice(parse(gm.pricing.prompt));
-                            setOutputPrice(parse(gm.pricing.completion));
-                            setCacheReadPrice(parse(gm.pricing.cache_read));
-                            setCacheWritePrice(parse(gm.pricing.cache_write));
-                            setReasoningPrice(parse(gm.pricing.reasoning));
-                          }
                           if (gm?.context_length) {
                             setContextLength(String(Math.floor(gm.context_length / 1000)));
                           } else {
@@ -549,6 +638,26 @@ export default function EditPriceModal({
                         ]}
                       />
                     </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('editpricemodal.public_model_label')}</label>
+                      <input
+                        value={publicModelId}
+                        onChange={(e) => setPublicModelId(e.target.value)}
+                        className="w-full h-10 min-h-10 px-3 text-sm leading-none border border-zinc-200 rounded-lg bg-white placeholder:text-[11px] placeholder:text-zinc-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
+                        placeholder={t('editpricemodal.public_model_placeholder')}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('editpricemodal.provider_model_id')}</label>
+                    <input
+                      value={providerModelId}
+                      onChange={(e) => setProviderModelId(e.target.value)}
+                      className="w-full h-10 min-h-10 px-3 text-sm leading-none border border-zinc-200 rounded-lg bg-white placeholder:text-[11px] placeholder:text-zinc-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
+                      placeholder={t('editpricemodal.placeholder_alias')}
+                    />
                   </div>
 
                   {showModelNotInProviderCatalog ? (
@@ -784,12 +893,12 @@ export default function EditPriceModal({
                   </div>
                   <div className="min-w-0 pr-1">
                     <h3 className="font-bold text-[14px] text-zinc-900 leading-tight truncate w-[110px] break-all">
-                      {resolveGlobalModel(model, globalModels)?.name || t('editpricemodal.preview_model_id')}
+                      {effectivePublicModelId || t('editpricemodal.preview_model_id')}
                     </h3>
-                    <p className="text-[10px] text-zinc-400 font-medium truncate mt-0.5" title={model || undefined}>
-                      {model ? (
+                    <p className="text-[10px] text-zinc-400 font-medium truncate mt-0.5" title={effectivePublicModelId || undefined}>
+                      {effectivePublicModelId ? (
                         <>
-                          <span className="font-mono text-zinc-500">{model}</span>
+                          <span className="font-mono text-zinc-500">{effectivePublicModelId}</span>
                           {providerAccountId ? <span> · {providerAccountId}</span> : null}
                         </>
                       ) : (
@@ -844,6 +953,20 @@ export default function EditPriceModal({
               
               return (
                 <div className="mt-4 flex flex-col gap-3">
+                  <div className="bg-white border border-zinc-200 rounded-xl p-3 space-y-1.5 text-[11px]">
+                    <div className="flex justify-between gap-3">
+                      <span className="text-zinc-500">{t('editpricemodal.preview_public_model')}</span>
+                      <span className="font-mono text-zinc-800 text-right">{effectivePublicModelId || '-'}</span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-zinc-500">{t('editpricemodal.preview_global_model')}</span>
+                      <span className="font-mono text-zinc-800 text-right">{model || '-'}</span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-zinc-500">{t('editpricemodal.provider_model_id')}</span>
+                      <span className="font-mono text-zinc-800 text-right">{providerModelId || effectivePublicModelId || '-'}</span>
+                    </div>
+                  </div>
                   {isLosing && (
                     <div className="bg-red-50/50 border border-red-200 rounded-xl p-3 flex items-start gap-2">
                        <p className="text-[11px] font-medium text-red-700 leading-snug">

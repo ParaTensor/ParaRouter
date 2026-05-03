@@ -84,13 +84,14 @@ pub async fn load_all_pools(db: &Pool<Postgres>, engine: &UniGatewayEngine) -> a
     #[derive(sqlx::FromRow)]
     struct PricingMappingRow {
         model_id: String,
+        public_model_id: Option<String>,
         provider_account_id: String,
         provider_model_id: Option<String>,
     }
 
     let mappings = sqlx::query_as::<_, PricingMappingRow>(
         r#"
-        SELECT model_id, provider_account_id, provider_model_id 
+        SELECT model_id, public_model_id, provider_account_id, provider_model_id 
         FROM model_provider_pricings 
         WHERE version = $1 AND status = 'online'
         "#,
@@ -101,13 +102,32 @@ pub async fn load_all_pools(db: &Pool<Postgres>, engine: &UniGatewayEngine) -> a
 
     let mut account_model_mappings: HashMap<String, HashMap<String, String>> = HashMap::new();
     for mapping in mappings {
-        if let Some(alias) = mapping.provider_model_id {
-            if !alias.trim().is_empty() {
-                account_model_mappings
-                    .entry(mapping.provider_account_id)
-                    .or_default()
-                    .insert(mapping.model_id, alias);
-            }
+        let public_model_id = mapping
+            .public_model_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(mapping.model_id.as_str())
+            .to_string();
+        let provider_target = mapping
+            .provider_model_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned)
+            .or_else(|| {
+                if public_model_id != mapping.model_id {
+                    Some(mapping.model_id.clone())
+                } else {
+                    None
+                }
+            });
+
+        if let Some(provider_target) = provider_target {
+            account_model_mappings
+                .entry(mapping.provider_account_id)
+                .or_default()
+                .insert(public_model_id, provider_target);
         }
     }
 

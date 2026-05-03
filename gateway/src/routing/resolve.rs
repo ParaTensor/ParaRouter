@@ -9,6 +9,7 @@ use unigateway_sdk::core::ExecutionTarget;
 pub struct ResolvedModelTarget {
     pub target: ExecutionTarget,
     pub endpoint_hint: Option<String>,
+    pub global_model_id: String,
 }
 
 /// Resolves a requested model name to a `provider_account_id` (pool id).
@@ -24,6 +25,7 @@ pub async fn resolve_model_target(
 
     #[derive(sqlx::FromRow)]
     struct PricingRow {
+        global_model_id: String,
         provider_account_id: String,
         provider_key_id: String,
     }
@@ -38,10 +40,10 @@ pub async fn resolve_model_target(
     let rows = if let Some(pid) = forced_provider_account_id.filter(|s| !s.is_empty()) {
         sqlx::query_as::<_, PricingRow>(
             r#"
-            SELECT mpp.provider_account_id, mpp.provider_key_id
+                        SELECT mpp.model_id AS global_model_id, mpp.provider_account_id, mpp.provider_key_id
             FROM model_provider_pricings mpp
             JOIN provider_api_keys pak ON pak.id = mpp.provider_key_id
-            WHERE mpp.model_id = $1
+                        WHERE COALESCE(mpp.public_model_id, mpp.model_id) = $1
               AND mpp.provider_account_id = $2
               AND mpp.version = $3
               AND mpp.status = 'online'
@@ -59,10 +61,10 @@ pub async fn resolve_model_target(
     } else {
         sqlx::query_as::<_, PricingRow>(
             r#"
-            SELECT mpp.provider_account_id, mpp.provider_key_id
+                        SELECT mpp.model_id AS global_model_id, mpp.provider_account_id, mpp.provider_key_id
             FROM model_provider_pricings mpp
             JOIN provider_api_keys pak ON pak.id = mpp.provider_key_id
-            WHERE mpp.model_id = $1
+                        WHERE COALESCE(mpp.public_model_id, mpp.model_id) = $1
               AND mpp.version = $2
               AND mpp.status = 'online'
               AND pak.status = 'active'
@@ -82,10 +84,10 @@ pub async fn resolve_model_target(
             // Fallback: allow active keys even when health status is stale.
             sqlx::query_as::<_, PricingRow>(
                 r#"
-                SELECT mpp.provider_account_id, mpp.provider_key_id
+                                SELECT mpp.model_id AS global_model_id, mpp.provider_account_id, mpp.provider_key_id
                 FROM model_provider_pricings mpp
                 JOIN provider_api_keys pak ON pak.id = mpp.provider_key_id
-                WHERE mpp.model_id = $1
+                                WHERE COALESCE(mpp.public_model_id, mpp.model_id) = $1
                   AND mpp.provider_account_id = $2
                   AND mpp.version = $3
                   AND mpp.status = 'online'
@@ -109,10 +111,10 @@ pub async fn resolve_model_target(
     let rows = if rows.is_empty() && forced_provider_account_id.is_some() {
         sqlx::query_as::<_, PricingRow>(
             r#"
-            SELECT mpp.provider_account_id, mpp.provider_key_id
+                        SELECT mpp.model_id AS global_model_id, mpp.provider_account_id, mpp.provider_key_id
             FROM model_provider_pricings mpp
             JOIN provider_api_keys pak ON pak.id = mpp.provider_key_id
-            WHERE mpp.model_id = $1
+                        WHERE COALESCE(mpp.public_model_id, mpp.model_id) = $1
               AND mpp.version = $2
               AND mpp.status = 'online'
               AND pak.status = 'active'
@@ -133,10 +135,10 @@ pub async fn resolve_model_target(
         // Final fallback: if health check status is lagging behind, keep routing with active keys.
         sqlx::query_as::<_, PricingRow>(
             r#"
-            SELECT mpp.provider_account_id, mpp.provider_key_id
+                        SELECT mpp.model_id AS global_model_id, mpp.provider_account_id, mpp.provider_key_id
             FROM model_provider_pricings mpp
             JOIN provider_api_keys pak ON pak.id = mpp.provider_key_id
-            WHERE mpp.model_id = $1
+                        WHERE COALESCE(mpp.public_model_id, mpp.model_id) = $1
               AND mpp.version = $2
               AND mpp.status = 'online'
               AND pak.status = 'active'
@@ -166,5 +168,6 @@ pub async fn resolve_model_target(
             pool_id: selected.provider_account_id,
         },
         endpoint_hint: Some(selected.provider_key_id),
+        global_model_id: selected.global_model_id,
     })
 }

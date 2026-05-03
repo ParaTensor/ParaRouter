@@ -8,7 +8,10 @@ export type PricingEditFormState = {
   drawerOpen: boolean;
   providerDrawerOpen: boolean;
   formPriceMode: 'fixed' | 'markup';
+  status: 'online' | 'paused' | 'offline';
   model: string;
+  publicModelId: string;
+  providerModelId: string;
   providerAccountId: string;
   inputCost: string;
   outputCost: string;
@@ -32,7 +35,10 @@ function emptyState(): PricingEditFormState {
     drawerOpen: false,
     providerDrawerOpen: false,
     formPriceMode: 'fixed',
+    status: 'online',
     model: '',
+    publicModelId: '',
+    providerModelId: '',
     providerAccountId: '',
     inputCost: '',
     outputCost: '',
@@ -95,8 +101,17 @@ export const pricingEdit = {
   setFormPriceMode(v: 'fixed' | 'markup') {
     patch({ formPriceMode: v });
   },
+  setStatus(v: 'online' | 'paused' | 'offline') {
+    patch({ status: v });
+  },
   setModel(v: string) {
     patch({ model: v });
+  },
+  setPublicModelId(v: string) {
+    patch({ publicModelId: v });
+  },
+  setProviderModelId(v: string) {
+    patch({ providerModelId: v });
   },
   setProviderAccountId(v: string) {
     patch({ providerAccountId: v });
@@ -150,7 +165,10 @@ export const pricingEdit = {
     const next: Partial<PricingEditFormState> = {
       drawerOpen: true,
       formPriceMode: 'fixed',
+      status: 'online',
       model: '',
+      publicModelId: '',
+      providerModelId: '',
       inputCost: '',
       outputCost: '',
       cacheReadCost: '',
@@ -183,7 +201,10 @@ export const pricingEdit = {
     patch({
       drawerOpen: true,
       formPriceMode: 'fixed',
-      model: row.model,
+      status: (row.operational_status || row.status || 'online') as 'online' | 'paused' | 'offline',
+      model: row.global_model_id || row.model,
+      publicModelId: row.public_model_id || '',
+      providerModelId: row.provider_model_id || '',
       providerAccountId: row.provider_account_id || '',
       inputCost: n(row.input_cost),
       outputCost: n(row.output_cost),

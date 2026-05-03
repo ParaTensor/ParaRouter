@@ -7,6 +7,7 @@ use serde_json::json;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use super::auth_can_access_model_listing;
 use crate::auth::keys::AuthenticatedUser;
 use crate::runtime::ParaRouterRuntime;
 
@@ -19,6 +20,7 @@ pub async fn list_models(
     #[derive(sqlx::FromRow)]
     struct ModelRow {
         model_id: String,
+        global_model_id: String,
     }
 
     let current_version = match sqlx::query_scalar::<_, String>(
@@ -40,7 +42,7 @@ pub async fn list_models(
 
     let result = sqlx::query_as::<_, ModelRow>(
         r#"
-        SELECT DISTINCT model_id
+        SELECT DISTINCT COALESCE(public_model_id, model_id) AS model_id, model_id AS global_model_id
         FROM model_provider_pricings
         WHERE version = $1 AND status = 'online'
         ORDER BY model_id ASC
@@ -70,13 +72,7 @@ pub async fn list_models(
     let data: Vec<_> = rows
         .into_iter()
         .filter(|row| {
-            auth.user_allowed_models
-                .as_ref()
-                .is_none_or(|models| models.contains(&row.model_id))
-                && auth
-                    .key_allowed_models
-                    .as_ref()
-                    .is_none_or(|models| models.contains(&row.model_id))
+            auth_can_access_model_listing(&auth, &row.model_id, Some(&row.global_model_id))
         })
         .map(|row| {
             json!({

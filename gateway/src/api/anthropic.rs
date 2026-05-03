@@ -9,6 +9,7 @@ use axum::{
 use axum::body::Body;
 use uuid::Uuid;
 
+use super::enforce_model_acl;
 use unigateway_sdk::core::ExecutionTarget;
 use unigateway_sdk::host::{
     dispatch_request, HostContext, HostDispatchOutcome, HostDispatchTarget, HostError,
@@ -86,37 +87,6 @@ pub async fn messages(
         }
     };
 
-    // Enforce ACL
-    if let Some(user_models) = &auth.user_allowed_models {
-        if !user_models.contains(&request.model) {
-            return (
-                StatusCode::FORBIDDEN,
-                axum::Json(serde_json::json!({ "error": "Model not allowed by user policy" }))
-            ).into_response();
-        }
-    }
-    if let Some(key_models) = &auth.key_allowed_models {
-        if !key_models.contains(&request.model) {
-            return (
-                StatusCode::FORBIDDEN,
-                axum::Json(serde_json::json!({ "error": "Model not allowed by API key policy" }))
-            ).into_response();
-        }
-    }
-
-    // Annotate metadata securely from Auth layer
-    let request_correlation_id = Uuid::new_v4().to_string();
-    request.metadata.insert(
-        "request_correlation_id".to_string(),
-        request_correlation_id.clone(),
-    );
-    request.metadata.insert("user_id".to_string(), auth.uid.clone());
-    request.metadata.insert("key_id".to_string(), auth.key_id.clone());
-    request.metadata.insert("requested_model".to_string(), request.model.clone());
-    if let Some(budget_limit) = auth.budget_limit {
-        request.metadata.insert("budget_limit".to_string(), budget_limit.to_string());
-    }
-
     // Stage 2: Routing Lifecycle (find ExecutionTarget)
     let resolved = match resolve_model_target(&runtime, &request.model, provider_hint.as_deref()).await {
         Ok(t) => t,
@@ -128,6 +98,24 @@ pub async fn messages(
                 .into_response();
         }
     };
+
+    if let Err(response) = enforce_model_acl(&auth, &request.model, Some(&resolved.global_model_id)) {
+        return response;
+    }
+
+    // Annotate metadata securely from Auth layer
+    let request_correlation_id = Uuid::new_v4().to_string();
+    request.metadata.insert(
+        "request_correlation_id".to_string(),
+        request_correlation_id.clone(),
+    );
+    request.metadata.insert("user_id".to_string(), auth.uid.clone());
+    request.metadata.insert("key_id".to_string(), auth.key_id.clone());
+    request.metadata.insert("requested_model".to_string(), request.model.clone());
+    request.metadata.insert("global_model_id".to_string(), resolved.global_model_id.clone());
+    if let Some(budget_limit) = auth.budget_limit {
+        request.metadata.insert("budget_limit".to_string(), budget_limit.to_string());
+    }
 
     let service_id = match &resolved.target {
         ExecutionTarget::Pool { pool_id } => pool_id.clone(),
@@ -144,6 +132,7 @@ pub async fn messages(
         "resolved_provider_account_id".to_string(),
         service_id.clone(),
     );
+    request.metadata.insert("global_model_id".to_string(), resolved.global_model_id.clone());
     if let Some(endpoint_hint) = &resolved.endpoint_hint {
         request.metadata.insert(
             "resolved_provider_key_id".to_string(),

@@ -33,6 +33,11 @@ impl GatewayHooks for ParaRouterHooks {
             let user_id = report.metadata.get("user_id").cloned().unwrap_or_default();
             let key_id = report.metadata.get("key_id").cloned().unwrap_or_default();
             let model = report.metadata.get("requested_model").cloned().unwrap_or_else(|| "unknown".to_string());
+            let billing_model = report
+                .metadata
+                .get("global_model_id")
+                .cloned()
+                .unwrap_or_else(|| model.clone());
             let request_correlation_id = report
                 .metadata
                 .get("request_correlation_id")
@@ -76,7 +81,7 @@ impl GatewayHooks for ParaRouterHooks {
                     RETURNING ((billing.p_price * $2 + billing.c_price * $3) / 1000000.0)::float8 as cost_deducted
                     "#,
                 )
-                .bind(&model)
+                .bind(&billing_model)
                 .bind(prompt_tokens)
                 .bind(completion_tokens)
                 .bind(&user_id)

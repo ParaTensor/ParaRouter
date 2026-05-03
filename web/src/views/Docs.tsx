@@ -65,6 +65,17 @@ const client = new OpenAI({
     t('docs.reasoning_tip_3'),
   ];
 
+  const reasoningCards = [
+    {
+      title: t('docs.reasoning_cap_title'),
+      body: t('docs.reasoning_cap_body'),
+    },
+    {
+      title: t('docs.reasoning_effort_title'),
+      body: t('docs.reasoning_effort_body'),
+    },
+  ];
+
   const tocItems = [
     {id: SECTION_IDS.intro, labelKey: 'docs.intro_title'},
     {id: SECTION_IDS.integration, labelKey: 'docs.integration_title'},
@@ -274,6 +285,17 @@ const client = new OpenAI({
               <div>
                 <h3 className="text-sm font-semibold text-amber-950">{t('docs.reasoning_title')}</h3>
                 <p className="mt-1 text-sm text-amber-900/80">{t('docs.reasoning_intro')}</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {reasoningCards.map((card) => (
+                  <div
+                    key={card.title}
+                    className="rounded-lg border border-amber-200/80 bg-white/70 p-4 space-y-1.5"
+                  >
+                    <h4 className="text-sm font-semibold text-amber-950">{card.title}</h4>
+                    <p className="text-sm leading-relaxed text-amber-950/85">{card.body}</p>
+                  </div>
+                ))}
               </div>
               <div className="space-y-2" role="list">
                 {reasoningTips.map((tip) => (

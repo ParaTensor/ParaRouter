@@ -7,6 +7,14 @@ import { requireRole } from '../middleware/auth';
 const router = Router();
 router.use(requireRole('admin'));
 
+function normalizePublicModelId(modelId: string, rawPublicModelId: unknown): string | null {
+  const normalized = String(rawPublicModelId || '').trim();
+  if (!normalized || normalized === modelId) {
+    return null;
+  }
+  return normalized;
+}
+
 router.get('/state', async (_req, res) => {
   const { rows } = await pool.query('SELECT current_version, config_version FROM pricing_state WHERE id = 1');
   const state = rows[0] || { current_version: 'bootstrap', config_version: 1 };
@@ -17,7 +25,7 @@ router.get('/', async (_req, res) => {
   const stateResult = await pool.query('SELECT current_version FROM pricing_state WHERE id = 1');
   const currentVersion = stateResult.rows[0]?.current_version || 'bootstrap';
   const { rows } = await pool.query(
-    `SELECT model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
+    `SELECT model_id, public_model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
             reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, version, provider_model_id, updated_at
      FROM model_provider_pricings
      WHERE version = $1
@@ -29,7 +37,7 @@ router.get('/', async (_req, res) => {
 
 router.get('/draft', async (_req, res) => {
   const { rows } = await pool.query(
-    `SELECT model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
+    `SELECT model_id, public_model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
             reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, provider_model_id, updated_at
      FROM model_provider_pricings_draft
      ORDER BY model_id ASC, provider_account_id ASC, provider_key_id ASC`,
@@ -40,6 +48,8 @@ router.get('/draft', async (_req, res) => {
 router.put('/draft', async (req, res) => {
   const payload = (req.body || {}) as PricingDraftUpsertRequest;
   const modelId = String(payload.model || '').trim();
+  const publicModelId = normalizePublicModelId(modelId, payload.public_model_id);
+  const effectivePublicModelId = publicModelId || modelId;
   const providerAccountId = String(payload.provider_account_id || '').trim();
   const mode = String(payload.price_mode || '').trim().toLowerCase();
   const providerKeyId = String(payload.provider_key_id || '').trim();
@@ -78,13 +88,21 @@ router.put('/draft', async (req, res) => {
   }
 
   await pool.query(
+    `DELETE FROM model_provider_pricings_draft
+     WHERE COALESCE(public_model_id, model_id) = $1
+       AND (provider_account_id <> $2 OR provider_key_id <> $3)`,
+    [effectivePublicModelId, providerAccountId, providerKeyId],
+  );
+
+  await pool.query(
     `INSERT INTO model_provider_pricings_draft (
-       model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
+       model_id, public_model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
        reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, provider_model_id, updated_at
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
      ON CONFLICT (model_id, provider_account_id, provider_key_id)
      DO UPDATE SET
+       public_model_id = EXCLUDED.public_model_id,
        price_mode = EXCLUDED.price_mode,
        input_cost = EXCLUDED.input_cost,
        output_cost = EXCLUDED.output_cost,
@@ -106,6 +124,7 @@ router.put('/draft', async (req, res) => {
        updated_at = EXCLUDED.updated_at`,
     [
       modelId,
+      publicModelId,
       providerAccountId,
       providerKeyId,
       mode,
@@ -165,6 +184,8 @@ router.post('/draft/batch', async (req, res) => {
     await client.query('BEGIN');
     for (const payload of models) {
       const modelId = String(payload.model || '').trim();
+      const publicModelId = normalizePublicModelId(modelId, payload.public_model_id);
+      const effectivePublicModelId = publicModelId || modelId;
       const mode = String(payload.price_mode || '').trim().toLowerCase();
       if (!modelId || (mode !== 'fixed' && mode !== 'markup')) continue;
       const gRow = await client.query('SELECT 1 FROM llm_models WHERE id = $1 LIMIT 1', [modelId]);
@@ -177,13 +198,21 @@ router.post('/draft/batch', async (req, res) => {
       }
 
       await client.query(
+        `DELETE FROM model_provider_pricings_draft
+         WHERE COALESCE(public_model_id, model_id) = $1
+           AND (provider_account_id <> $2 OR provider_key_id <> $3)`,
+        [effectivePublicModelId, providerAccountId, providerKeyId],
+      );
+
+      await client.query(
         `INSERT INTO model_provider_pricings_draft (
-           model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
-           reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, updated_at
+           model_id, public_model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
+           reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, provider_model_id, updated_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
          ON CONFLICT (model_id, provider_account_id, provider_key_id)
          DO UPDATE SET
+           public_model_id = EXCLUDED.public_model_id,
            price_mode = EXCLUDED.price_mode,
            input_cost = EXCLUDED.input_cost,
            output_cost = EXCLUDED.output_cost,
@@ -201,9 +230,11 @@ router.post('/draft/batch', async (req, res) => {
            latency_ms = EXCLUDED.latency_ms,
            is_top_provider = EXCLUDED.is_top_provider,
            status = EXCLUDED.status,
+           provider_model_id = EXCLUDED.provider_model_id,
            updated_at = EXCLUDED.updated_at`,
         [
           modelId,
+          publicModelId,
           providerAccountId,
           providerKeyId,
           mode,
@@ -223,6 +254,7 @@ router.post('/draft/batch', async (req, res) => {
           payload.latency_ms ?? null,
           Boolean(payload.is_top_provider),
           payload.status || 'online',
+          payload.provider_model_id || null,
           now,
         ]
       );
@@ -266,15 +298,15 @@ router.delete('/draft', async (req, res) => {
 
 router.post('/preview', async (_req, res) => {
   const draftResult = await pool.query(
-    `SELECT model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
-            reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, updated_at
+        `SELECT model_id, public_model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
+          reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, provider_model_id, updated_at
      FROM model_provider_pricings_draft`,
   );
   const stateResult = await pool.query('SELECT current_version FROM pricing_state WHERE id = 1');
   const currentVersion = stateResult.rows[0]?.current_version || 'bootstrap';
   const currentResult = await pool.query(
-    `SELECT model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
-            reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, version, updated_at
+        `SELECT model_id, public_model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
+          reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, version, provider_model_id, updated_at
      FROM model_provider_pricings
      WHERE version = $1`,
     [currentVersion],
@@ -282,12 +314,12 @@ router.post('/preview', async (_req, res) => {
 
   const currentMap = new Map<string, any>();
   for (const row of currentResult.rows) {
-    currentMap.set(`${row.model_id}::${row.provider_account_id}::${row.provider_key_id}`, row);
+    currentMap.set(`${row.public_model_id || row.model_id}::${row.provider_account_id}::${row.provider_key_id}`, row);
   }
   const changes = draftResult.rows.map((row) => {
-    const key = `${row.model_id}::${row.provider_account_id}::${row.provider_key_id}`;
+    const key = `${row.public_model_id || row.model_id}::${row.provider_account_id}::${row.provider_key_id}`;
     return {
-      model: row.model_id,
+      model: row.public_model_id || row.model_id,
       provider_account_id: row.provider_account_id,
       before: currentMap.get(key) ? mapPricingRow(currentMap.get(key)) : null,
       after: mapPricingRow(row),
@@ -323,21 +355,24 @@ router.post('/publish', async (req, res) => {
     );
     const affectedModels = Number(affectedResult.rows[0]?.count || 0);
 
-    // 1. Copy all rows from current version that are NOT being overwritten by draft
+    // 1. Copy all rows from current version whose model ids are untouched in draft.
     await client.query(
       `INSERT INTO model_provider_pricings (
-         model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
+         model_id, public_model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
          reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, version, provider_model_id, updated_at
        )
-       SELECT model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
+       SELECT model_id, public_model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
               reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, $1, provider_model_id, updated_at
        FROM model_provider_pricings
        WHERE version = $2
          AND NOT EXISTS (
            SELECT 1 FROM model_provider_pricings_draft d
-           WHERE d.model_id = model_provider_pricings.model_id
-             AND d.provider_account_id = model_provider_pricings.provider_account_id
-             AND d.provider_key_id = model_provider_pricings.provider_key_id
+           WHERE COALESCE(d.public_model_id, d.model_id) = COALESCE(model_provider_pricings.public_model_id, model_provider_pricings.model_id)
+              OR (
+                d.model_id = model_provider_pricings.model_id
+                AND d.provider_account_id = model_provider_pricings.provider_account_id
+                AND d.provider_key_id = model_provider_pricings.provider_key_id
+              )
          )`,
       [version, currentVersion],
     );
@@ -346,10 +381,10 @@ router.post('/publish', async (req, res) => {
     if (draftCount > 0) {
       await client.query(
         `INSERT INTO model_provider_pricings (
-           model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
+           model_id, public_model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
            reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, version, provider_model_id, updated_at
          )
-         SELECT model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
+         SELECT model_id, public_model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost, reasoning_cost, input_price, output_price, cache_read_price, cache_write_price,
                 reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, $1, provider_model_id, updated_at
          FROM model_provider_pricings_draft`,
         [version],

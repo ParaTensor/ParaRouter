@@ -1,11 +1,14 @@
 import React from 'react';
 import {useParams, useNavigate} from 'react-router-dom';
 import {apiGet, apiPut} from '../lib/api';
+import { Select } from '../components/Select';
 import { useTranslation } from "react-i18next";
 
 type PricingRow = {
   model: string;
+  provider_model_id?: string | null;
   provider_account_id?: string | null;
+  provider_key_id?: string | null;
   price_mode: 'fixed' | 'markup';
   input_price?: number | null;
   output_price?: number | null;
@@ -53,11 +56,17 @@ export default function ModelProvidersView() {
     load();
   }, [load]);
 
-  const updateRouting = async (providerAccountId: string, patch: {is_top_provider?: boolean; status?: string; latency_ms?: number}) => {
-    setSavingProvider(providerAccountId);
+  const updateRouting = async (
+    providerAccountId: string,
+    providerKeyId: string,
+    patch: {is_top_provider?: boolean; status?: string; latency_ms?: number},
+  ) => {
+    const saveKey = `${providerAccountId}::${providerKeyId}`;
+    setSavingProvider(saveKey);
     try {
       await apiPut(`/api/models/${encodeURIComponent(decodedModelId)}/routing`, {
         provider_account_id: providerAccountId,
+        provider_key_id: providerKeyId,
         ...patch,
       });
       await load();
@@ -83,6 +92,8 @@ export default function ModelProvidersView() {
             <thead>
               <tr className="bg-gray-50/70 border-b">
                 <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('modelproviders.provider')}</th>
+                <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Key</th>
+                <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Upstream</th>
                 <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('modelproviders.input')}</th>
                 <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('modelproviders.output')}</th>
                 <th className="px-3 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">{t('modelproviders.reasoning')}</th>
@@ -95,13 +106,15 @@ export default function ModelProvidersView() {
             </thead>
             <tbody className="divide-y">
               {loading ? (
-                <tr><td colSpan={9} className="px-3 py-12 text-center text-zinc-500 text-sm">{t('modelproviders.loading')}</td></tr>
+                <tr><td colSpan={11} className="px-3 py-12 text-center text-zinc-500 text-sm">{t('modelproviders.loading')}</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={9} className="px-3 py-12 text-center text-zinc-500 text-sm">{t('modelproviders.no_provider_pricing_found_for_')}</td></tr>
+                <tr><td colSpan={11} className="px-3 py-12 text-center text-zinc-500 text-sm">{t('modelproviders.no_provider_pricing_found_for_')}</td></tr>
               ) : (
                 rows.map((row, idx) => (
-                  <tr key={`${row.provider_account_id || 'na'}-${idx}`} className="hover:bg-gray-50/50 transition-colors">
+                  <tr key={`${row.provider_account_id || 'na'}::${row.provider_key_id || idx}`} className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-3 py-3 text-sm font-semibold">{row.provider_account_id || '-'}</td>
+                    <td className="px-3 py-3 text-sm font-mono text-xs text-zinc-500">{row.provider_key_id || '-'}</td>
+                    <td className="px-3 py-3 text-sm font-mono text-xs text-zinc-500">{row.provider_model_id || decodedModelId}</td>
                     <td className="px-3 py-3 text-sm font-mono">{fmtPrice(row.input_price)}</td>
                     <td className="px-3 py-3 text-sm font-mono">{fmtPrice(row.output_price)}</td>
                     <td className="px-3 py-3 text-sm font-mono">{fmtPrice(row.reasoning_price)}</td>
@@ -112,21 +125,22 @@ export default function ModelProvidersView() {
                       <input
                         type="checkbox"
                         checked={Boolean(row.is_top_provider)}
-                        disabled={!row.provider_account_id || savingProvider === row.provider_account_id}
-                        onChange={(e) => row.provider_account_id && updateRouting(row.provider_account_id, {is_top_provider: e.target.checked})}
+                        disabled={!row.provider_account_id || !row.provider_key_id || savingProvider === `${row.provider_account_id}::${row.provider_key_id}`}
+                        onChange={(e) => row.provider_account_id && row.provider_key_id && updateRouting(row.provider_account_id, row.provider_key_id, {is_top_provider: e.target.checked})}
                       />
                     </td>
                     <td className="px-3 py-3 text-sm">
-                      <select
+                      <Select
                         value={row.status || 'online'}
-                        disabled={!row.provider_account_id || savingProvider === row.provider_account_id}
-                        onChange={(e) => row.provider_account_id && updateRouting(row.provider_account_id, {status: e.target.value})}
-                        className="px-2 py-1 border rounded text-xs bg-white"
-                      >
-                        <option value="online">{t('modelproviders.online')}</option>
-                        <option value="degraded">{t('modelproviders.degraded')}</option>
-                        <option value="offline">{t('modelproviders.offline')}</option>
-                      </select>
+                        disabled={!row.provider_account_id || !row.provider_key_id || savingProvider === `${row.provider_account_id}::${row.provider_key_id}`}
+                        onChange={(value) => row.provider_account_id && row.provider_key_id && updateRouting(row.provider_account_id, row.provider_key_id, {status: value})}
+                        options={[
+                          { value: 'online', label: t('modelproviders.online') },
+                          { value: 'paused', label: t('modelproviders.paused') },
+                          { value: 'offline', label: t('modelproviders.offline') },
+                        ]}
+                        className="min-w-[9rem]"
+                      />
                     </td>
                   </tr>
                 ))

@@ -180,6 +180,7 @@ CREATE TABLE IF NOT EXISTS llm_models (
 -- Hub's modern pricings tables
 CREATE TABLE IF NOT EXISTS model_provider_pricings (
   model_id TEXT NOT NULL,
+  public_model_id TEXT,
   provider_account_id TEXT NOT NULL,
   price_mode TEXT NOT NULL CHECK (price_mode IN ('fixed', 'markup')),
   input_cost DOUBLE PRECISION,
@@ -208,6 +209,7 @@ CREATE TABLE IF NOT EXISTS model_provider_pricings (
 
 CREATE TABLE IF NOT EXISTS model_provider_pricings_draft (
   model_id TEXT NOT NULL,
+  public_model_id TEXT,
   provider_account_id TEXT NOT NULL,
   price_mode TEXT NOT NULL CHECK (price_mode IN ('fixed', 'markup')),
   input_cost DOUBLE PRECISION,
@@ -308,6 +310,8 @@ ALTER TABLE model_provider_pricings_draft ADD COLUMN IF NOT EXISTS reasoning_cos
 
 ALTER TABLE model_provider_pricings ADD COLUMN IF NOT EXISTS provider_model_id TEXT;
 ALTER TABLE model_provider_pricings_draft ADD COLUMN IF NOT EXISTS provider_model_id TEXT;
+ALTER TABLE model_provider_pricings ADD COLUMN IF NOT EXISTS public_model_id TEXT;
+ALTER TABLE model_provider_pricings_draft ADD COLUMN IF NOT EXISTS public_model_id TEXT;
 
 -- Gateway legacy alter tables
 ALTER TABLE model_pricings ADD COLUMN IF NOT EXISTS cache_read_price DOUBLE PRECISION;

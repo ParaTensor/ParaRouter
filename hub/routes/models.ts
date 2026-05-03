@@ -168,33 +168,65 @@ export async function listPublishedRoutedModels(_req: Request, res: Response) {
     const currentVersion = stateResult.rows[0]?.current_version || 'bootstrap';
 
     const { rows } = await client.query(
-      `WITH latest_published AS (
-         SELECT model_id, provider_account_id, provider_key_id, price_mode, input_price, output_price,
-                cache_read_price, cache_write_price, reasoning_price, markup_rate,
-                is_top_provider, context_length, latency_ms
-         FROM model_provider_pricings
-         WHERE version = $1 AND status = 'online'
+      `WITH ranked_routes AS (
+         SELECT
+           mpp.model_id,
+           COALESCE(mpp.public_model_id, mpp.model_id) AS public_model_id,
+           mpp.provider_account_id,
+           mpp.provider_key_id,
+           mpp.provider_model_id,
+           mpp.price_mode,
+           mpp.input_price,
+           mpp.output_price,
+           mpp.cache_read_price,
+           mpp.cache_write_price,
+           mpp.reasoning_price,
+           mpp.markup_rate,
+           mpp.is_top_provider,
+           mpp.context_length,
+           mpp.latency_ms,
+           ROW_NUMBER() OVER (
+             PARTITION BY COALESCE(mpp.public_model_id, mpp.model_id)
+             ORDER BY
+               CASE
+                 WHEN COALESCE(pak.health_status, 'unknown') <> 'unhealthy' THEN 0
+                 ELSE 1
+               END ASC,
+               mpp.is_top_provider DESC,
+               mpp.input_price ASC NULLS LAST,
+               mpp.provider_account_id ASC,
+               mpp.provider_key_id ASC
+           ) AS route_rank
+         FROM model_provider_pricings mpp
+         JOIN provider_api_keys pak ON pak.id = mpp.provider_key_id
+         WHERE mpp.version = $1
+           AND mpp.status = 'online'
+           AND pak.status = 'active'
        )
        SELECT
-         lp.model_id as id,
+         rr.public_model_id as id,
+         rr.model_id,
          lm.name,
          pa.label as provider_label,
-         pa.id as provider_account_id,
+         rr.provider_account_id,
+         rr.provider_key_id,
+         rr.provider_model_id,
          lm.description,
-         COALESCE(lp.context_length, lm.context_length) as context_length,
-         lp.price_mode,
-         lp.markup_rate,
-         lp.input_price,
-         lp.output_price,
-         lp.cache_read_price,
-         lp.cache_write_price,
-         lp.reasoning_price,
-         lp.latency_ms,
+         COALESCE(rr.context_length, lm.context_length) as context_length,
+         rr.price_mode,
+         rr.markup_rate,
+         rr.input_price,
+         rr.output_price,
+         rr.cache_read_price,
+         rr.cache_write_price,
+         rr.reasoning_price,
+         rr.latency_ms,
          lm.global_pricing
-       FROM latest_published lp
-       JOIN llm_models lm ON lp.model_id = lm.id
-       JOIN provider_accounts pa ON lp.provider_account_id = pa.id
-       ORDER BY lm.name ASC, pa.label ASC, lp.provider_key_id ASC`,
+       FROM ranked_routes rr
+       JOIN llm_models lm ON rr.model_id = lm.id
+       JOIN provider_accounts pa ON rr.provider_account_id = pa.id
+       WHERE rr.route_rank = 1
+       ORDER BY lm.name ASC, rr.public_model_id ASC`,
       [currentVersion]
     );
 
@@ -214,7 +246,9 @@ export async function listPublishedRoutedModels(_req: Request, res: Response) {
 
       return {
         id: row.id,
+        global_model_id: row.model_id,
         provider_account_id: row.provider_account_id,
+        provider_key_id: row.provider_key_id,
         name: row.name,
         provider: row.provider_label,
         description: row.description || '',
@@ -261,27 +295,29 @@ router.get('/:modelId/providers', requireRole('admin'), async (req, res) => {
   const currentVersion = stateResult.rows[0]?.current_version || 'bootstrap';
   const [draftResult, publishedResult] = await Promise.all([
     pool.query(
-      `SELECT model_id, provider_account_id, price_mode, input_price, output_price, cache_read_price, cache_write_price,
+      `SELECT model_id, public_model_id, provider_account_id, provider_key_id, provider_model_id, price_mode, input_price, output_price, cache_read_price, cache_write_price,
               reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, updated_at
        FROM model_provider_pricings_draft
-       WHERE model_id = $1
-       ORDER BY provider_account_id ASC`,
+       WHERE COALESCE(public_model_id, model_id) = $1
+       ORDER BY provider_account_id ASC, provider_key_id ASC`,
       [modelId],
     ),
     pool.query(
-      `SELECT model_id, provider_account_id, price_mode, input_price, output_price, cache_read_price, cache_write_price,
+      `SELECT model_id, public_model_id, provider_account_id, provider_key_id, provider_model_id, price_mode, input_price, output_price, cache_read_price, cache_write_price,
               reasoning_price, markup_rate, currency, context_length, latency_ms, is_top_provider, status, version, updated_at
        FROM model_provider_pricings
-       WHERE model_id = $1 AND version = $2
-       ORDER BY provider_account_id ASC`,
+       WHERE COALESCE(public_model_id, model_id) = $1 AND version = $2
+       ORDER BY provider_account_id ASC, provider_key_id ASC`,
       [modelId, currentVersion],
     ),
   ]);
-  const draftKeys = new Set(draftResult.rows.map((r) => `${r.model_id}::${r.provider_account_id}`));
+  const draftKeys = new Set(
+    draftResult.rows.map((r) => `${r.model_id}::${r.provider_account_id}::${r.provider_key_id}`),
+  );
   const merged = [
     ...draftResult.rows.map((r) => ({ ...mapPricingRow(r), row_status: 'Draft' })),
     ...publishedResult.rows
-      .filter((r) => !draftKeys.has(`${r.model_id}::${r.provider_account_id}`))
+      .filter((r) => !draftKeys.has(`${r.model_id}::${r.provider_account_id}::${r.provider_key_id}`))
       .map((r) => ({ ...mapPricingRow(r), row_status: 'Published' })),
   ];
   res.json({ model_id: modelId, version: currentVersion, rows: merged });
@@ -293,10 +329,10 @@ router.get('/:modelId/routing', requireRole('admin'), async (req, res) => {
   const stateResult = await pool.query('SELECT current_version FROM pricing_state WHERE id = 1');
   const currentVersion = stateResult.rows[0]?.current_version || 'bootstrap';
   const { rows } = await pool.query(
-    `SELECT provider_account_id, is_top_provider, latency_ms, status
+    `SELECT provider_account_id, provider_key_id, provider_model_id, COALESCE(public_model_id, model_id) AS public_model_id, is_top_provider, latency_ms, status
      FROM model_provider_pricings
-     WHERE model_id = $1 AND version = $2
-     ORDER BY is_top_provider DESC, provider_account_id ASC`,
+     WHERE COALESCE(public_model_id, model_id) = $1 AND version = $2
+     ORDER BY is_top_provider DESC, provider_account_id ASC, provider_key_id ASC`,
     [modelId, currentVersion],
   );
   res.json({ model_id: modelId, version: currentVersion, providers: rows });
@@ -305,18 +341,45 @@ router.get('/:modelId/routing', requireRole('admin'), async (req, res) => {
 router.put('/:modelId/routing', requireRole('admin'), async (req, res) => {
   const modelId = decodeURIComponent(String(req.params.modelId || '')).trim();
   const providerAccountId = String(req.body?.provider_account_id || '').trim();
+  const providerKeyId = String(req.body?.provider_key_id || '').trim();
   const isTopProvider = Boolean(req.body?.is_top_provider);
   const status = req.body?.status != null ? String(req.body.status) : null;
   const latencyMs = req.body?.latency_ms != null ? Number(req.body.latency_ms) : null;
-  if (!modelId || !providerAccountId) {
-    return res.status(400).json({ error: 'modelId and provider_account_id required' });
+  if (!modelId || !providerAccountId || !providerKeyId) {
+    return res.status(400).json({ error: 'modelId, provider_account_id, and provider_key_id required' });
   }
+
+  const stateResult = await pool.query('SELECT current_version FROM pricing_state WHERE id = 1');
+  const currentVersion = stateResult.rows[0]?.current_version || 'bootstrap';
+
+  await pool.query(
+    `DELETE FROM model_provider_pricings_draft
+     WHERE COALESCE(public_model_id, model_id) = $1
+       AND (provider_account_id <> $2 OR provider_key_id <> $3)`,
+    [modelId, providerAccountId, providerKeyId],
+  );
+
+  await pool.query(
+    `INSERT INTO model_provider_pricings_draft (
+       model_id, public_model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost,
+       reasoning_cost, input_price, output_price, cache_read_price, cache_write_price, reasoning_price, markup_rate,
+       currency, context_length, latency_ms, is_top_provider, status, provider_model_id, updated_at
+     )
+     SELECT model_id, public_model_id, provider_account_id, provider_key_id, price_mode, input_cost, output_cost, cache_read_cost, cache_write_cost,
+            reasoning_cost, input_price, output_price, cache_read_price, cache_write_price, reasoning_price, markup_rate,
+            currency, context_length, latency_ms, is_top_provider, status, provider_model_id, updated_at
+     FROM model_provider_pricings
+     WHERE COALESCE(public_model_id, model_id) = $1 AND version = $2 AND provider_account_id = $3 AND provider_key_id = $4
+     ON CONFLICT (model_id, provider_account_id, provider_key_id) DO NOTHING`,
+    [modelId, currentVersion, providerAccountId, providerKeyId],
+  );
+
   if (isTopProvider) {
     await pool.query(
       `UPDATE model_provider_pricings_draft
        SET is_top_provider = false, updated_at = $3
-       WHERE model_id = $1 AND provider_account_id <> $2`,
-      [modelId, providerAccountId, Date.now()],
+       WHERE COALESCE(public_model_id, model_id) = $1 AND (provider_account_id <> $2 OR provider_key_id <> $4)`,
+      [modelId, providerAccountId, Date.now(), providerKeyId],
     );
   }
   await pool.query(
@@ -325,8 +388,8 @@ router.put('/:modelId/routing', requireRole('admin'), async (req, res) => {
          status = COALESCE($4, status),
          latency_ms = COALESCE($5, latency_ms),
          updated_at = $6
-     WHERE model_id = $1 AND provider_account_id = $2`,
-    [modelId, providerAccountId, isTopProvider, status, latencyMs, Date.now()],
+     WHERE COALESCE(public_model_id, model_id) = $1 AND provider_account_id = $2 AND provider_key_id = $7`,
+    [modelId, providerAccountId, isTopProvider, status, latencyMs, Date.now(), providerKeyId],
   );
   res.json({ status: 'saved' });
 });

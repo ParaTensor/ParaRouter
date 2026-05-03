@@ -13,6 +13,7 @@ export type ModelPayload = {
 
 export type PricingDraftUpsertRequest = {
   model: string;
+  public_model_id?: string | null;
   provider_model_id?: string | null;
   provider_account_id?: string | null;
   price_mode: 'fixed' | 'markup';

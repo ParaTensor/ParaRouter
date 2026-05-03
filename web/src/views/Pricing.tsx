@@ -49,15 +49,18 @@ export default function PricingView() {
   const [providerFilter, setProviderFilter] = React.useState('all');
   const [statusFilter, setStatusFilter] = React.useState<'all' | 'published' | 'draft'>('all');
   const [priceRange, setPriceRange] = React.useState<PriceRange>('all');
-  const [sortKey, setSortKey] = React.useState<SortKey>('updated');
-  const [sortDesc, setSortDesc] = React.useState(true);
+  const [sortKey, setSortKey] = React.useState<SortKey>('model');
+  const [sortDesc, setSortDesc] = React.useState(false);
   const [currentPage, setCurrentPage] = React.useState(1);
 
   const {
     drawerOpen,
     providerDrawerOpen,
     formPriceMode,
+    status,
     model,
+    publicModelId,
+    providerModelId,
     providerAccountId,
     inputCost,
     outputCost,
@@ -164,16 +167,22 @@ export default function PricingView() {
       cacheWritePrice: s.cacheWritePrice,
       reasoningPrice: s.reasoningPrice,
     };
+    const trimmedModelId = s.model.trim();
+    const trimmedPublicModelId = s.publicModelId.trim();
     const payload: Record<string, unknown> = {
-      model: s.model.trim(),
-      provider_model_id: null,
+      model: trimmedModelId,
+      public_model_id:
+        trimmedPublicModelId && trimmedPublicModelId !== trimmedModelId
+          ? trimmedPublicModelId
+          : null,
+      provider_model_id: s.providerModelId.trim() || null,
       provider_account_id: s.providerAccountId,
       price_mode: mode,
       currency: 'USD',
       context_length: s.contextLength ? Number(s.contextLength) : null,
       latency_ms: s.latencyMs ? Number(s.latencyMs) : null,
       reasoning_price: r.reasoningPrice ? Number(r.reasoningPrice) : null,
-      status: 'online',
+      status: s.status,
       provider_key_id: s.providerKeyId || '',
     };
 
@@ -293,7 +302,7 @@ export default function PricingView() {
       if (sortKey === 'input') return direction * ((a.input_price || 0) - (b.input_price || 0));
       if (sortKey === 'output') return direction * ((a.output_price || 0) - (b.output_price || 0));
       if (sortKey === 'final') return direction * ((getFinalPrice(a) || 0) - (getFinalPrice(b) || 0));
-      return direction * ((a.updated_at || 0) - (b.updated_at || 0));
+      return direction * a.model.localeCompare(b.model);
     });
   }, [draft, published, search, providerFilter, statusFilter, priceRange, sortKey, sortDesc]);
 
@@ -307,7 +316,7 @@ export default function PricingView() {
       return;
     }
     setSortKey(nextKey);
-    setSortDesc(nextKey === 'updated');
+    setSortDesc(false);
   };
 
   return (
@@ -370,7 +379,10 @@ export default function PricingView() {
       <EditPriceModal 
         isOpen={drawerOpen}
         onClose={() => pricingEdit.closeEditDrawer()}
+        status={status} setStatus={pricingEdit.setStatus}
         model={model} setModel={pricingEdit.setModel}
+        publicModelId={publicModelId} setPublicModelId={pricingEdit.setPublicModelId}
+        providerModelId={providerModelId} setProviderModelId={pricingEdit.setProviderModelId}
         providerAccountId={providerAccountId} setProviderAccountId={pricingEdit.setProviderAccountId}
         providerKeyId={providerKeyId} setProviderKeyId={pricingEdit.setProviderKeyId}
         formPriceMode={formPriceMode} setFormPriceMode={pricingEdit.setFormPriceMode}
@@ -397,6 +409,7 @@ export default function PricingView() {
         handlePublish={handlePublish}
         preview={preview}
         draft={draft}
+        published={published}
       />
     </div>
   );

@@ -22,6 +22,22 @@ type PublicGlobalModel = {
 
 type RoutedRow = {id: string; name: string; provider?: string};
 
+function buildCatalogFallbackFromRouted(routed: RoutedRow[]): PublicGlobalModel[] {
+  const uniqueById = new Map<string, PublicGlobalModel>();
+  for (const row of routed) {
+    const id = typeof row.id === 'string' ? row.id.trim() : '';
+    if (!id || uniqueById.has(id)) continue;
+    uniqueById.set(id, {
+      id,
+      name: (typeof row.name === 'string' && row.name.trim()) || id,
+      description: '',
+      context_length: null,
+      global_pricing: null,
+    });
+  }
+  return Array.from(uniqueById.values());
+}
+
 function orderRegistryLikeModelsPage(registry: PublicGlobalModel[], routed: RoutedRow[]) {
   if (!registry.length) return [];
   if (!routed.length) return sortByNameThenId(registry);
@@ -68,25 +84,23 @@ export default function LandingCatalogSection() {
     let cancelled = false;
 
     (async () => {
-      try {
-        const [registry, routed] = await Promise.all([
-          apiGet<PublicGlobalModel[]>('/api/llm-models'),
-          apiGet<RoutedRow[]>('/api/models').catch(() => [] as RoutedRow[]),
-        ]);
+      const [registryResult, routedResult] = await Promise.allSettled([
+        apiGet<PublicGlobalModel[]>('/api/llm-models'),
+        apiGet<RoutedRow[]>('/api/models'),
+      ]);
 
-        if (!cancelled) {
-          if (Array.isArray(registry)) setCatalog(registry);
-          if (Array.isArray(routed)) setRoutedSnapshot(routed);
-        }
-      } catch {
-        if (!cancelled) {
-          setCatalogError(true);
-          setCatalog([]);
-          setRoutedSnapshot([]);
-        }
-      } finally {
-        if (!cancelled) setCatalogLoading(false);
-      }
+      if (cancelled) return;
+
+      const registry = registryResult.status === 'fulfilled' && Array.isArray(registryResult.value) ? registryResult.value : [];
+      const routed = routedResult.status === 'fulfilled' && Array.isArray(routedResult.value) ? routedResult.value : [];
+      const bothRequestsFailed = registryResult.status === 'rejected' && routedResult.status === 'rejected';
+
+      const effectiveCatalog = registry.length > 0 ? registry : buildCatalogFallbackFromRouted(routed);
+
+      setCatalog(effectiveCatalog);
+      setRoutedSnapshot(routed);
+      setCatalogError(bothRequestsFailed);
+      setCatalogLoading(false);
     })();
 
     return () => {

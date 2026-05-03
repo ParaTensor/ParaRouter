@@ -1,5 +1,7 @@
 export type PricingRow = {
   model: string;
+  global_model_id?: string | null;
+  public_model_id?: string | null;
   provider_model_id?: string | null;
   provider_account_id?: string | null;
   price_mode: 'fixed' | 'markup';
@@ -51,7 +53,7 @@ export type PricingPreview = {
   estimated_profit_margin?: number | null;
 };
 
-export type SortKey = 'model' | 'provider' | 'input' | 'output' | 'final' | 'status' | 'updated';
+export type SortKey = 'model' | 'provider' | 'input' | 'output' | 'final' | 'status';
 
 export type PriceRange = 'all' | 'lt1' | '1to10' | 'gte10';
 
