@@ -146,11 +146,50 @@ fn downgrade_incompatible_tool_choice(
     true
 }
 
+fn model_requires_completion_cap_guard(model: &str) -> bool {
+    model.trim().to_ascii_lowercase().starts_with("gpt-5")
+}
+
+fn request_has_explicit_completion_cap(request: &PermissiveChatRequest) -> bool {
+    request.max_tokens.is_some()
+        || request
+            .extra
+            .get("max_completion_tokens")
+            .is_some_and(|value| !value.is_null())
+}
+
+fn completion_cap_guard_error(request: &PermissiveChatRequest) -> Option<String> {
+    let model = request.model.as_deref()?.trim();
+    if model.is_empty() || !model_requires_completion_cap_guard(model) {
+        return None;
+    }
+
+    if !request_has_explicit_completion_cap(request) {
+        return None;
+    }
+
+    Some(format!(
+        "Explicit max_tokens/max_completion_tokens is disabled for {model} on ParaRouter because GPT-5-family models can spend the full completion budget on reasoning and return no visible output. Omit the cap, or lower reasoning_effort if you need faster responses."
+    ))
+}
+
 pub async fn chat_completions(
     auth: AuthenticatedUser,
     State(runtime): State<Arc<ParaRouterRuntime>>,
     Json(permissive_request): Json<PermissiveChatRequest>,
 ) -> Response {
+    if let Some(message) = completion_cap_guard_error(&permissive_request) {
+        return (
+            StatusCode::BAD_REQUEST,
+            axum::Json(serde_json::json!({
+                "error": {
+                    "message": message
+                }
+            })),
+        )
+            .into_response();
+    }
+
     let provider_hint = permissive_request
         .pararouter_provider_account_id
         .as_ref()
@@ -303,10 +342,12 @@ pub async fn chat_completions(
 #[cfg(test)]
 mod tests {
     use super::{
-        base_url_requires_forced_tool_choice_downgrade, downgrade_incompatible_tool_choice,
-        endpoint_urls_require_forced_tool_choice_downgrade,
+        base_url_requires_forced_tool_choice_downgrade, completion_cap_guard_error,
+        downgrade_incompatible_tool_choice, endpoint_urls_require_forced_tool_choice_downgrade,
     };
+    use crate::translators::openai::PermissiveChatRequest;
     use serde_json::{json, Value};
+    use std::collections::HashMap;
 
     #[test]
     fn memtensor_forced_function_downgrades_to_required_for_single_matching_tool() {
@@ -415,6 +456,68 @@ mod tests {
             "https://www.kaopuapi.com/v1".to_string(),
             "https://api.memtensor.cn/v1".to_string()
         ]));
+    }
+
+    #[test]
+    fn gpt5_requests_reject_explicit_max_tokens() {
+        let request = PermissiveChatRequest {
+            model: Some("gpt-5.5".to_string()),
+            messages: None,
+            temperature: None,
+            top_p: None,
+            top_k: None,
+            max_tokens: Some(512),
+            stop: None,
+            stream: None,
+            tools: None,
+            tool_choice: None,
+            pararouter_provider_account_id: None,
+            extra: HashMap::new(),
+        };
+
+        let error = completion_cap_guard_error(&request).expect("guard should reject cap");
+        assert!(error.contains("gpt-5.5"));
+        assert!(error.contains("max_tokens/max_completion_tokens"));
+    }
+
+    #[test]
+    fn gpt5_requests_reject_explicit_max_completion_tokens() {
+        let request = PermissiveChatRequest {
+            model: Some("gpt-5.5".to_string()),
+            messages: None,
+            temperature: None,
+            top_p: None,
+            top_k: None,
+            max_tokens: None,
+            stop: None,
+            stream: None,
+            tools: None,
+            tool_choice: None,
+            pararouter_provider_account_id: None,
+            extra: HashMap::from([("max_completion_tokens".to_string(), json!(1024))]),
+        };
+
+        assert!(completion_cap_guard_error(&request).is_some());
+    }
+
+    #[test]
+    fn non_gpt5_requests_keep_explicit_completion_caps() {
+        let request = PermissiveChatRequest {
+            model: Some("gpt-4o-mini".to_string()),
+            messages: None,
+            temperature: None,
+            top_p: None,
+            top_k: None,
+            max_tokens: Some(512),
+            stop: None,
+            stream: None,
+            tools: None,
+            tool_choice: None,
+            pararouter_provider_account_id: None,
+            extra: HashMap::new(),
+        };
+
+        assert!(completion_cap_guard_error(&request).is_none());
     }
 }
 
