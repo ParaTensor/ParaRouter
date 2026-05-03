@@ -746,6 +746,8 @@ dependencies = [
  "dotenvy",
  "futures",
  "futures-util",
+ "latch-core",
+ "latch-score",
  "once_cell",
  "rand 0.8.5",
  "regex",
@@ -1262,6 +1264,26 @@ dependencies = [
  "futures-util",
  "once_cell",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "latch-core"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1bd33dce296448bdfe0c859a3de9a3977e40442f028ef42c54f2be90de64f60"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "latch-score"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4668016ea86679cea23559c91c018a0bb669852abf4a7ed1b53eff7721fc845d"
+dependencies = [
+ "latch-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2953,9 +2975,9 @@ checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
 name = "unigateway-core"
-version = "1.6.0"
+version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87440c4081dbb4a5cf6697c56d9271c61789aba6af337519f47f2979911aa654"
+checksum = "27e3eae09ddba0884f4b26615e99aa2ad6d89945bbf7aeaf4877b8c34d07d6a9"
 dependencies = [
  "futures-core",
  "futures-util",
@@ -2970,9 +2992,9 @@ dependencies = [
 
 [[package]]
 name = "unigateway-host"
-version = "1.6.0"
+version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c42fb023c4f739046ff43c74d63bb56aa053e0ab6bfbd7ef64443482b4c6b64"
+checksum = "d505b030c1698b9733ffe377556b508e35b9f3f76273ab3c7a7533b8968c8f35"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2988,9 +3010,9 @@ dependencies = [
 
 [[package]]
 name = "unigateway-protocol"
-version = "1.6.0"
+version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "972627b43633c97475985659dc0110151894fbca337dd7b14f1cd516597440fc"
+checksum = "f68be83f0d111e1f61df6aa0f56e8583aa5a390e7bb4daba508cf6142a18afe3"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3004,9 +3026,9 @@ dependencies = [
 
 [[package]]
 name = "unigateway-sdk"
-version = "1.6.0"
+version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bf846abbd09771ec58df75be14295fdea428c70d0e2647225576fb8a65f61a8"
+checksum = "497b57df74f458fab6770c47a9902da53e0d8d8fc5ac8c4a033a7ee3ac8932c9"
 dependencies = [
  "unigateway-core",
  "unigateway-host",

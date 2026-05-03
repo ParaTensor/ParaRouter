@@ -90,7 +90,7 @@ gateway/src/
 |------|------|------|
 | Web 框架 | `axum 0.7`, `tower 0.4`, `tower-http 0.5` | HTTP 服务、路由、CORS、Trace |
 | 异步运行时 | `tokio 1.0` | 异步 IO、后台任务 |
-| LLM 引擎 | `unigateway-sdk 1.6.0` | 核心网关引擎：驱动注册、Pool 管理、负载均衡、流式响应 |
+| LLM 引擎 | `unigateway-sdk 1.7.1` | 核心网关引擎：驱动注册、Pool 管理、负载均衡、流式响应 |
 | 序列化 | `serde`, `serde_json`, `serde_yaml` | JSON/YAML 序列化 |
 | HTTP 客户端 | `reqwest 0.12` | 上游 LLM Provider 请求 |
 | 数据库 | `sqlx 0.8` (Postgres + SQLite + migrate) | 异步 SQL、连接池、模型映射 |

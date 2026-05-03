@@ -122,6 +122,10 @@ export default function PricingView() {
 
   React.useEffect(() => {
     loadAll();
+    return () => {
+      pricingEdit.closeEditDrawer();
+      pricingEdit.setProviderDrawerOpen(false);
+    };
   }, [loadAll]);
 
   React.useEffect(() => {

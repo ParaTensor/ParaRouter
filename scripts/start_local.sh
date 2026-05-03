@@ -32,9 +32,10 @@ echo "Starting ParaRouter local services..."
 echo "  Hub:     http://127.0.0.1:${HUB_PORT}"
 echo "  Gateway: http://127.0.0.1:8000"
 echo "  Web:     http://${WEB_HOST}:5173"
+echo "  Mode:    standalone web dev server with HMR; Hub redirects page requests to Web in dev"
 echo
 
-DATABASE_URL="$PARAROUTER_DATABASE_URL" HUB_DISABLE_EMBEDDED_VITE=1 PORT="$HUB_PORT" npm run dev --prefix hub &
+DATABASE_URL="$PARAROUTER_DATABASE_URL" HUB_DISABLE_EMBEDDED_VITE=1 WEB_DEV_ORIGIN="http://${WEB_HOST}:5173" PORT="$HUB_PORT" npm run dev --prefix hub &
 hub_pid=$!
 
 DATABASE_URL="$PARAROUTER_DATABASE_URL" cargo run --manifest-path gateway/Cargo.toml &

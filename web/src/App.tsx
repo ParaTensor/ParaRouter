@@ -2,7 +2,7 @@ import React from 'react';
 import LandingView from './views/Landing';
 import {Link, Navigate, Route, Routes, useLocation} from 'react-router-dom';
 import {APP_SHELL_MAX_CLASS, APP_SHELL_PAD_CLASS} from './lib/appShellLayout';
-import {isAuthenticated} from './lib/session';
+import {isAuthenticated, localUser} from './lib/session';
 import {useTranslation} from 'react-i18next';
 
 const LoginView = React.lazy(() => import('./views/Login'));
@@ -42,6 +42,7 @@ export default function App() {
   }, []);
 
   const authed = isAuthenticated();
+  const isAdmin = localUser.role === 'admin';
   const isLoginRoute = location.pathname === '/login';
   const isLandingRoute = location.pathname === '/';
   const isChatRoute = location.pathname.startsWith('/chat');
@@ -79,10 +80,10 @@ export default function App() {
                 <Route path="/activity" element={authed ? <ActivityView /> : <Navigate to="/login" replace />} />
                 <Route path="/insights" element={authed ? <Navigate to="/activity" replace /> : <Navigate to="/login" replace />} />
                 <Route path="/rankings" element={authed ? <Navigate to="/activity" replace /> : <Navigate to="/login" replace />} />
-                <Route path="/pricing" element={authed ? <PricingView /> : <Navigate to="/login" replace />} />
-                <Route path="/providers" element={authed ? <ProvidersView /> : <Navigate to="/login" replace />} />
-                <Route path="/models/:modelId/providers" element={authed ? <ModelProvidersView /> : <Navigate to="/login" replace />} />
-                <Route path="/global-models" element={authed ? <GlobalModelsView /> : <Navigate to="/login" replace />} />
+                <Route path="/pricing" element={authed ? (isAdmin ? <PricingView /> : <Navigate to="/models" replace />) : <Navigate to="/login" replace />} />
+                <Route path="/providers" element={authed ? (isAdmin ? <ProvidersView /> : <Navigate to="/models" replace />) : <Navigate to="/login" replace />} />
+                <Route path="/models/:modelId/providers" element={authed ? (isAdmin ? <ModelProvidersView /> : <Navigate to="/models" replace />) : <Navigate to="/login" replace />} />
+                <Route path="/global-models" element={authed ? (isAdmin ? <GlobalModelsView /> : <Navigate to="/models" replace />) : <Navigate to="/login" replace />} />
                 <Route path="/chat" element={authed ? <ChatView /> : <Navigate to="/login" replace />} />
                 <Route path="/docs" element={authed ? <DocsView /> : <Navigate to="/login" replace />} />
                 <Route
@@ -91,7 +92,7 @@ export default function App() {
                 />
                 <Route path="/keys" element={authed ? <KeysView /> : <Navigate to="/login" replace />} />
                 <Route path="/settings" element={authed ? <SettingsView /> : <Navigate to="/login" replace />} />
-                <Route path="/customers" element={authed ? <CustomersView /> : <Navigate to="/login" replace />} />
+                <Route path="/customers" element={authed ? (isAdmin ? <CustomersView /> : <Navigate to="/models" replace />) : <Navigate to="/login" replace />} />
                 <Route path="*" element={<Navigate to={authed ? '/models' : '/login'} replace />} />
               </Routes>
             </React.Suspense>

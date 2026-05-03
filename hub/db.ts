@@ -54,6 +54,20 @@ export async function initSchema() {
     await pool.query(`ALTER TABLE model_provider_pricings_draft ADD PRIMARY KEY (model_id, provider_account_id, provider_key_id)`);
   } catch (err: any) { console.error('Migration failed (pricings_draft pkey):', err.message); }
 
+  try {
+    await pool.query(`ALTER TABLE activity ADD COLUMN IF NOT EXISTS provider_account_id TEXT`);
+    await pool.query(`ALTER TABLE activity ADD COLUMN IF NOT EXISTS provider_key_id TEXT`);
+    await pool.query(`ALTER TABLE activity ADD COLUMN IF NOT EXISTS request_correlation_id TEXT`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_activity_request_correlation_id ON activity(request_correlation_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_activity_provider_account_id ON activity(provider_account_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_activity_provider_key_id ON activity(provider_key_id)`);
+  } catch (err: any) { console.error('Migration failed (activity routing columns):', err.message); }
+
+  try {
+    await pool.query(`ALTER TABLE stream_observations ADD COLUMN IF NOT EXISTS request_correlation_id TEXT`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_stream_observations_request_correlation_id ON stream_observations(request_correlation_id)`);
+  } catch (err: any) { console.error('Migration failed (stream observation correlation columns):', err.message); }
+
   const defaultLlmModels = [
     // OpenAI Models
     { id: 'gpt-5.4', name: 'gpt-5.4', provider: 'OpenAI', description: "OpenAI Flagship", category: 'Creative', context_length: 200000, global_pricing: { prompt: 2.50, completion: 15.00, cache_read: 0.25 }, score: 98.2, trend: 'up' },

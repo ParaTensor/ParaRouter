@@ -1,4 +1,4 @@
-import {getAuthToken} from './session';
+import {clearAuthSession, getAuthToken} from './session';
 
 const envApiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '');
 const API_BASE_URL = envApiBaseUrl || '';
@@ -41,6 +41,23 @@ type RequestOptions = {
   signal?: AbortSignal;
 };
 
+function isInteractiveAuthEndpoint(path: string): boolean {
+  return path === '/api/auth/login' || path === '/api/auth/register/request' || path === '/api/auth/register/verify';
+}
+
+function handleUnauthorized(path: string) {
+  if (typeof window === 'undefined' || isInteractiveAuthEndpoint(path)) {
+    return;
+  }
+
+  clearAuthSession();
+
+  const next = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  if (window.location.pathname !== '/login') {
+    window.location.assign(`/login?next=${encodeURIComponent(next)}`);
+  }
+}
+
 async function request<T>(method: string, path: string, body?: unknown, options?: RequestOptions): Promise<T> {
   const url = resolveApiUrl(path);
   const response = await fetch(url, {
@@ -61,7 +78,17 @@ async function request<T>(method: string, path: string, body?: unknown, options?
     } else {
       responseBody = null;
     }
-    const message = extractErrorMessage(responseBody) || `${method} ${url} failed: ${response.status}`;
+    if (response.status === 401) {
+      handleUnauthorized(path);
+    }
+
+    const fallbackMessage =
+      response.status === 401
+        ? '登录已过期，请重新登录'
+        : response.status === 403
+          ? '当前账号无权执行此操作'
+          : `${method} ${url} failed: ${response.status}`;
+    const message = extractErrorMessage(responseBody) || fallbackMessage;
     throw new ApiError(message, response.status, responseBody);
   }
   if (response.status === 204) return undefined as T;

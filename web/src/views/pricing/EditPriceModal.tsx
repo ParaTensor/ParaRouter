@@ -2,6 +2,7 @@ import React from 'react';
 import { Zap } from 'lucide-react';
 import { Select } from '../../components/Select';
 import { Dialog, DialogBackdrop, DialogPanel } from '@headlessui/react';
+import { useNavigate } from 'react-router-dom';
 import { ProviderKeyRow, DrawerTab, PricingPreview, PricingRow } from './types';
 import { useTranslation } from "react-i18next";
 import { cn } from '../../lib/utils';
@@ -256,6 +257,7 @@ export default function EditPriceModal({
   handlePreview, saveDraft, handlePublish, preview, draft
 }: EditPriceModalProps) {
     const { t } = useTranslation();
+  const navigate = useNavigate();
 
   const [formError, setFormError] = React.useState<string | null>(null);
   const [costMultiplier, setCostMultiplier] = React.useState('1.0');
@@ -548,6 +550,28 @@ export default function EditPriceModal({
                       />
                     </div>
                   </div>
+
+                  {showModelNotInProviderCatalog ? (
+                    <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 sm:flex-row sm:items-start sm:justify-between">
+                      <p className="text-xs leading-relaxed text-amber-900">
+                        {t('editpricemodal.provider_catalog_mismatch', {model: model.trim()})}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          const params = new URLSearchParams();
+                          if (providerAccountId.trim()) params.set('provider', providerAccountId.trim());
+                          if (providerKeyId.trim()) params.set('key', providerKeyId.trim());
+                          const query = params.toString();
+                          navigate(query ? `/providers?${query}` : '/providers');
+                        }}
+                        className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100"
+                      >
+                        {t('editpricemodal.open_provider_catalog_editor')}
+                      </button>
+                    </div>
+                  ) : null}
 
                   <div
                     className={cn(

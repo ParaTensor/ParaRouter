@@ -3,7 +3,6 @@ import crypto from 'crypto';
 import { pool } from '../db';
 import {
   fetchProviderSupportedModelsWithLog,
-  mapVendorModelNamesToGlobalIds,
   normalizeProviderBaseUrl,
   normalizeProviderId,
   providerBaseUrls,
@@ -25,12 +24,26 @@ function normalizeCatalogModels(raw: unknown) {
     .filter((item) => item.length > 0);
 }
 
+function mergeCatalogModels(preferred: string[], existing: string[]) {
+  const merged: string[] = [];
+  const seen = new Set<string>();
+  for (const item of [...preferred, ...existing]) {
+    const normalized = String(item || '').trim();
+    if (!normalized) continue;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(normalized);
+  }
+  return merged;
+}
+
 /** Fetches upstream /models (etc.) and persists only on success; does not clear existing catalog on failure. */
 async function refreshProviderModelCatalog(provider: string): Promise<CatalogRefreshResult> {
   const emptyLog: ProviderCatalogFetchLogEntry[] = [];
 
   const { rows: accounts } = await pool.query(
-    `SELECT id, base_url
+    `SELECT id, base_url, COALESCE(supported_models, '[]'::jsonb) AS supported_models
      FROM provider_accounts
      WHERE id = $1
      LIMIT 1`,
@@ -64,8 +77,9 @@ async function refreshProviderModelCatalog(provider: string): Promise<CatalogRef
     return { ok: false, count: 0, error: error || 'Failed to fetch model catalog', fetch_log };
   }
 
-  const { rows: globalRows } = await pool.query<{ id: string }>('SELECT id FROM llm_models');
-  const mapped = mapVendorModelNamesToGlobalIds(models, globalRows);
+  const normalizedModels = normalizeCatalogModels(models);
+  const existingModels = normalizeCatalogModels(account.supported_models);
+  const mergedModels = mergeCatalogModels(normalizedModels, existingModels);
 
   const now = Date.now();
   await pool.query(
@@ -74,9 +88,9 @@ async function refreshProviderModelCatalog(provider: string): Promise<CatalogRef
          supported_models_updated_at = $3,
          updated_at = $3
      WHERE id = $1`,
-    [provider, JSON.stringify(mapped), now],
+    [provider, JSON.stringify(mergedModels), now],
   );
-  return { ok: true, count: mapped.length, fetch_log };
+  return { ok: true, count: mergedModels.length, fetch_log };
 }
 
 router.get('/provider-types', requireRole('admin'), async (_req, res) => {
@@ -183,7 +197,7 @@ router.post('/provider-keys/:provider/:keyId/refresh-model-catalog', requireRole
     }
 
     const { rows: keyRows } = await pool.query(
-      `SELECT k.api_key, a.base_url
+      `SELECT k.api_key, a.base_url, COALESCE(k.supported_models, '[]'::jsonb) AS supported_models
        FROM provider_api_keys k
        JOIN provider_accounts a ON a.id = k.provider_account_id
        WHERE k.id = $1 AND k.provider_account_id = $2 AND k.status = 'active'
@@ -200,8 +214,9 @@ router.post('/provider-keys/:provider/:keyId/refresh-model-catalog', requireRole
       return res.status(400).json({ error, fetch_log });
     }
 
-    const { rows: globalRows } = await pool.query<{ id: string }>('SELECT id FROM llm_models');
-    const mapped = mapVendorModelNamesToGlobalIds(models, globalRows);
+    const normalizedModels = normalizeCatalogModels(models);
+    const existingModels = normalizeCatalogModels(row.supported_models);
+    const mergedModels = mergeCatalogModels(normalizedModels, existingModels);
 
     const now = Date.now();
     await pool.query(
@@ -210,14 +225,14 @@ router.post('/provider-keys/:provider/:keyId/refresh-model-catalog', requireRole
            supported_models_updated_at = $3,
            updated_at = $3
        WHERE id = $1 AND provider_account_id = $4`,
-      [keyId, JSON.stringify(mapped), now, provider],
+      [keyId, JSON.stringify(mergedModels), now, provider],
     );
     await pool.query("SELECT pg_notify('config_changed', 'provider_keys')");
     res.json({
       status: 'refreshed',
       provider,
       key_id: keyId,
-      supported_models_count: mapped.length,
+      supported_models_count: mergedModels.length,
       fetch_log,
     });
   } catch (error) {
@@ -304,26 +319,6 @@ router.put('/provider-keys/:provider', requireRole('admin'), async (req, res) =>
         );
       } else {
         await client.query(`DELETE FROM provider_api_keys WHERE provider_account_id = $1`, [provider]);
-      }
-
-      const catalogLists = keys.map((k) => normalizeCatalogModels(k.supported_models));
-      const allCatalogIds = new Set<string>();
-      for (const list of catalogLists) {
-        for (const id of list) allCatalogIds.add(id);
-      }
-      if (allCatalogIds.size > 0) {
-        const { rows: foundRows } = await client.query('SELECT id FROM llm_models WHERE id = ANY($1::text[])', [
-          [...allCatalogIds],
-        ]);
-        const found = new Set((foundRows as { id: string }[]).map((r) => r.id));
-        const missing = [...allCatalogIds].filter((id) => !found.has(id));
-        if (missing.length > 0) {
-          await client.query('ROLLBACK');
-          return res.status(400).json({
-            error: 'Each supported_models entry must match a global model id in llm_models',
-            missing_global_model_ids: missing,
-          });
-        }
       }
 
       for (const k of keys) {

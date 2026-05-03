@@ -4,6 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use unigateway_sdk::core::hooks::{AttemptFinishedEvent, AttemptStartedEvent, GatewayHooks};
 use unigateway_sdk::core::response::RequestReport;
+use crate::usage::health::mark_provider_key_healthy;
 
 pub struct ParaRouterHooks {
     pub db: Pool<Postgres>,
@@ -32,6 +33,21 @@ impl GatewayHooks for ParaRouterHooks {
             let user_id = report.metadata.get("user_id").cloned().unwrap_or_default();
             let key_id = report.metadata.get("key_id").cloned().unwrap_or_default();
             let model = report.metadata.get("requested_model").cloned().unwrap_or_else(|| "unknown".to_string());
+            let request_correlation_id = report
+                .metadata
+                .get("request_correlation_id")
+                .cloned();
+            let provider_account_id = report
+                .metadata
+                .get("resolved_provider_account_id")
+                .cloned();
+            let provider_key_id = report
+                .metadata
+                .get("resolved_provider_key_id")
+                .cloned();
+
+            // Successful real traffic should automatically recover key health status.
+            mark_provider_key_healthy(&db, provider_key_id.as_deref()).await;
             
             let prompt_tokens = report.usage.as_ref().and_then(|u| u.input_tokens).unwrap_or(0) as i32;
             let completion_tokens = report.usage.as_ref().and_then(|u| u.output_tokens).unwrap_or(0) as i32;
@@ -87,8 +103,19 @@ impl GatewayHooks for ParaRouterHooks {
             // Insert into activity table
             let result = sqlx::query(
                 r#"
-                INSERT INTO activity (timestamp, model, tokens, latency, status, user_id, cost)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                INSERT INTO activity (
+                    timestamp,
+                    model,
+                    tokens,
+                    latency,
+                    status,
+                    user_id,
+                    cost,
+                    request_correlation_id,
+                    provider_account_id,
+                    provider_key_id
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                 "#
             )
             .bind(timestamp)
@@ -98,11 +125,18 @@ impl GatewayHooks for ParaRouterHooks {
             .bind(status)
             .bind(user_id)
             .bind(cost)
+            .bind(request_correlation_id)
+            .bind(provider_account_id)
+            .bind(provider_key_id)
             .execute(&db)
             .await;
             
             if let Err(e) = result {
-                tracing::error!("Failed to persist request activity: {}", e);
+                tracing::error!(
+                    key_id = %key_id,
+                    "Failed to persist request activity: {}",
+                    e
+                );
             }
         })
     }

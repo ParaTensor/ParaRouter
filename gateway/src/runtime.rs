@@ -4,16 +4,27 @@ use unigateway_sdk::host::{
     EnvPoolHost, HostFuture, PoolHost, PoolLookupOutcome, PoolLookupResult,
 };
 
+use crate::usage::stream::StreamObservationSink;
+
 /// ParaRouter runtime state combining database connection and UniGateway engine.
 pub struct ParaRouterRuntime {
     pub db: Pool<Postgres>,
     pub engine: UniGatewayEngine,
+    pub stream_observation_sink: std::sync::Arc<dyn StreamObservationSink>,
 }
 
 impl ParaRouterRuntime {
     /// Create a new runtime with the given database pool and engine.
-    pub fn new(db: Pool<Postgres>, engine: UniGatewayEngine) -> Self {
-        Self { db, engine }
+    pub fn new(
+        db: Pool<Postgres>,
+        engine: UniGatewayEngine,
+        stream_observation_sink: std::sync::Arc<dyn StreamObservationSink>,
+    ) -> Self {
+        Self {
+            db,
+            engine,
+            stream_observation_sink,
+        }
     }
 }
 

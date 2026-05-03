@@ -169,9 +169,9 @@ export const pricingEdit = {
       (p.keys || []).filter((k) => !!k.id).map((k) => ({ id: k.id as string, provider: p.provider })),
     );
     if (allKeys.length > 0) {
-      const randomKey = allKeys[Math.floor(Math.random() * allKeys.length)]!;
-      next.providerKeyId = randomKey.id;
-      next.providerAccountId = randomKey.provider;
+      const firstKey = allKeys[0]!;
+      next.providerKeyId = firstKey.id;
+      next.providerAccountId = firstKey.provider;
     } else {
       next.providerKeyId = '';
       next.providerAccountId = '';

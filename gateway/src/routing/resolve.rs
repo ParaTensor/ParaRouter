@@ -77,6 +77,35 @@ pub async fn resolve_model_target(
         .await?
     };
 
+    let rows = if rows.is_empty() {
+        if let Some(pid) = forced_provider_account_id.filter(|s| !s.is_empty()) {
+            // Fallback: allow active keys even when health status is stale.
+            sqlx::query_as::<_, PricingRow>(
+                r#"
+                SELECT mpp.provider_account_id, mpp.provider_key_id
+                FROM model_provider_pricings mpp
+                JOIN provider_api_keys pak ON pak.id = mpp.provider_key_id
+                WHERE mpp.model_id = $1
+                  AND mpp.provider_account_id = $2
+                  AND mpp.version = $3
+                  AND mpp.status = 'online'
+                  AND pak.status = 'active'
+                ORDER BY mpp.is_top_provider DESC, mpp.input_price ASC NULLS LAST, mpp.provider_key_id ASC
+                LIMIT 1
+                "#,
+            )
+            .bind(requested_model)
+            .bind(pid)
+            .bind(&current_version)
+            .fetch_all(pool)
+            .await?
+        } else {
+            rows
+        }
+    } else {
+        rows
+    };
+
     let rows = if rows.is_empty() && forced_provider_account_id.is_some() {
         sqlx::query_as::<_, PricingRow>(
             r#"
@@ -88,6 +117,29 @@ pub async fn resolve_model_target(
               AND mpp.status = 'online'
               AND pak.status = 'active'
               AND COALESCE(pak.health_status, 'unknown') <> 'unhealthy'
+            ORDER BY mpp.is_top_provider DESC, mpp.input_price ASC NULLS LAST, mpp.provider_account_id ASC, mpp.provider_key_id ASC
+            LIMIT 1
+            "#,
+        )
+        .bind(requested_model)
+        .bind(&current_version)
+        .fetch_all(pool)
+        .await?
+    } else {
+        rows
+    };
+
+    let rows = if rows.is_empty() {
+        // Final fallback: if health check status is lagging behind, keep routing with active keys.
+        sqlx::query_as::<_, PricingRow>(
+            r#"
+            SELECT mpp.provider_account_id, mpp.provider_key_id
+            FROM model_provider_pricings mpp
+            JOIN provider_api_keys pak ON pak.id = mpp.provider_key_id
+            WHERE mpp.model_id = $1
+              AND mpp.version = $2
+              AND mpp.status = 'online'
+              AND pak.status = 'active'
             ORDER BY mpp.is_top_provider DESC, mpp.input_price ASC NULLS LAST, mpp.provider_account_id ASC, mpp.provider_key_id ASC
             LIMIT 1
             "#,

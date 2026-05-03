@@ -6,6 +6,14 @@
 - `web/`: ParaRouter Console (Frontend UI, React/Vite)
 - `packages/`: Shared libraries and types across workspaces
 
+## Documentation
+
+- `docs/README.md`: documentation index and topic directory overview
+- `docs/project/structure.md`: repository architecture and module responsibilities
+- `docs/unigateway/`: UniGateway migration, RFC, and design notes
+- `docs/ui/`: UI principles, guidelines, and table standards
+- `docs/billing/`: billing-specific testing and operational notes
+
 ## Quick Start
 
 ### 1. Install dependencies
@@ -20,6 +28,19 @@ The Hub is a Node.js API that manages users, billing, API keys, and configuratio
 # From workspace root
 npm run dev
 ```
+
+For local full-stack development, prefer:
+```bash
+npm run dev:local
+```
+
+This starts three processes:
+
+- Hub API on `http://127.0.0.1:3322`
+- Gateway on `http://127.0.0.1:8000`
+- Web Vite dev server with HMR on `http://127.0.0.1:5173`
+
+Use `5173` as the frontend entry during development so page edits appear immediately. To avoid confusion, Hub no longer serves a stale local `dist/` build in this mode; if you open a page route on `3322`, Hub redirects it to the Vite frontend.
 
 ### 3. Start the Data Plane (Gateway)
 The Gateway is a high-performance Rust proxy that handles LLM request forwarding.

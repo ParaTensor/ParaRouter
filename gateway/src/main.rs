@@ -4,6 +4,7 @@ use anyhow::Result;
 use gateway::api::api_router;
 use gateway::db::try_database_with_url;
 use gateway::runtime::ParaRouterRuntime;
+use gateway::usage::stream::DatabaseStreamObservationSink;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -23,7 +24,7 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    info!("Starting ParaRouter Gateway (powered by UniGateway v1.5.0)");
+    info!("Starting ParaRouter Gateway (powered by UniGateway v1.7.1)");
 
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let db_pool = match try_database_with_url(Some(&database_url)).await {
@@ -49,7 +50,12 @@ async fn main() -> Result<()> {
         .with_hooks(hooks)
         .build()?;
 
-    let runtime = Arc::new(ParaRouterRuntime::new(db_pool.clone(), engine));
+    let stream_observation_sink = Arc::new(DatabaseStreamObservationSink::new(db_pool.clone()));
+    let runtime = Arc::new(ParaRouterRuntime::new(
+        db_pool.clone(),
+        engine,
+        stream_observation_sink,
+    ));
 
     // Start Phase 2: Active Synchronization
     gateway::sync::bootstrap::start_background_syncer(runtime.clone()).await;

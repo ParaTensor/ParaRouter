@@ -13,10 +13,34 @@ import {
   type ProviderRow,
 } from './providersEditUiStore';
 
-type CatalogFeedbackState = {
-  provider: string;
+type ActionFeedbackState = {
+  target: string;
+  kind: 'catalog' | 'connection';
   ok: boolean;
   msg: string;
+};
+
+type ProviderHealthCheckResult = {
+  provider_account_id: string;
+  provider_key_id: string;
+  label: string;
+  probe_model: string | null;
+  ok: boolean;
+  status: number;
+  health_status: string;
+  checked_at: number;
+  error: string | null;
+};
+
+type ProviderHealthCheckResponse = {
+  status: string;
+  provider: string;
+  results: ProviderHealthCheckResult[];
+};
+
+type BusyActionState = {
+  target: string;
+  kind: 'catalog' | 'connection';
 };
 
 function normalizeProviderTimestamp(value: number | string | null | undefined) {
@@ -30,6 +54,28 @@ function normalizeProviderTimestamp(value: number | string | null | undefined) {
   return null;
 }
 
+function serializeSupportedModels(models?: string[]) {
+  return Array.isArray(models) && models.length > 0 ? models.join('\n') : '';
+}
+
+function parseSupportedModels(value: string) {
+  const seen = new Set<string>();
+  return value
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter((item) => {
+      if (!item) return false;
+      const key = item.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function areSupportedModelsEqual(left: string[], right: string[]) {
+  return left.length === right.length && left.every((item, index) => item === right[index]);
+}
+
 export default function ProvidersView() {
   const { t } = useTranslation();
   const isAdmin = localUser.role === 'admin';
@@ -38,8 +84,9 @@ export default function ProvidersView() {
   const [saving, setSaving] = React.useState(false);
   const { showModal, isEditing, formData, error } = useProvidersEditUi();
   const [selectedKeyIndex, setSelectedKeyIndex] = React.useState(0);
-  const [catalogBusyTarget, setCatalogBusyTarget] = React.useState<string | null>(null);
-  const [catalogFeedback, setCatalogFeedback] = React.useState<CatalogFeedbackState | null>(null);
+  const [busyAction, setBusyAction] = React.useState<BusyActionState | null>(null);
+  const [actionFeedback, setActionFeedback] = React.useState<ActionFeedbackState | null>(null);
+  const [catalogEditorValue, setCatalogEditorValue] = React.useState('');
   const loadProviders = React.useCallback(async (): Promise<ProviderRow[] | null> => {
     if (!isAdmin) {
       setLoading(false);
@@ -68,15 +115,50 @@ export default function ProvidersView() {
   }, [showModal, formData.keys.length]);
 
   React.useEffect(() => {
+    if (!showModal) {
+      setCatalogEditorValue('');
+      return;
+    }
+    const selectedKey = formData.keys[selectedKeyIndex];
+    setCatalogEditorValue(serializeSupportedModels(selectedKey?.supported_models));
+  }, [showModal, selectedKeyIndex, formData.keys]);
+
+  React.useEffect(() => {
     if (showModal) return;
-    setCatalogFeedback(null);
-    setCatalogBusyTarget(null);
+    setActionFeedback(null);
+    setBusyAction(null);
   }, [showModal]);
 
-  const catalogToastLoading =
-    catalogBusyTarget !== null &&
-    catalogFeedback !== null &&
-    catalogBusyTarget === catalogFeedback.provider;
+  const actionToastLoading =
+    busyAction !== null &&
+    actionFeedback !== null &&
+    busyAction.target === actionFeedback.target &&
+    busyAction.kind === actionFeedback.kind;
+
+  const applyCatalogEditorToFormData = React.useCallback(
+    (nextCatalogValue: string, baseFormData: ProviderRow = formData) => {
+      const selectedKey = baseFormData.keys[selectedKeyIndex];
+      if (!selectedKey) return baseFormData;
+
+      const normalizedModels = parseSupportedModels(nextCatalogValue);
+      const previousModels = Array.isArray(selectedKey.supported_models) ? selectedKey.supported_models : [];
+      const nextUpdatedAt = areSupportedModelsEqual(previousModels, normalizedModels)
+        ? selectedKey.supported_models_updated_at ?? null
+        : Date.now();
+
+      const nextKeys = [...baseFormData.keys];
+      nextKeys[selectedKeyIndex] = {
+        ...selectedKey,
+        supported_models: normalizedModels,
+        supported_models_updated_at: nextUpdatedAt,
+      };
+      return {
+        ...baseFormData,
+        keys: nextKeys,
+      };
+    },
+    [formData, selectedKeyIndex],
+  );
 
   const handleOpenModal = (provider?: ProviderRow) => {
     if (provider) {
@@ -86,6 +168,26 @@ export default function ProvidersView() {
     }
     setSelectedKeyIndex(0);
   };
+
+  const restoreFreshProviderIntoModal = React.useCallback(
+    (rows: ProviderRow[] | null, providerId: string, keyId?: string) => {
+      if (!rows) return;
+      const snap = getProvidersEditSnapshot();
+      if (!snap.showModal || !snap.isEditing || snap.formData.provider !== providerId) return;
+      const fresh = rows.find((p) => p.provider === providerId);
+      if (!fresh) return;
+      providersEdit.openEdit(fresh);
+      if (keyId) {
+        const idx = fresh.keys.findIndex((k) => String(k.id) === String(keyId));
+        if (idx >= 0) {
+          setSelectedKeyIndex(idx);
+          return;
+        }
+      }
+      setSelectedKeyIndex((current) => Math.min(current, Math.max(fresh.keys.length - 1, 0)));
+    },
+    [],
+  );
 
   const handleSaveProvider = async () => {
     const providerId = formData.provider.trim().toLowerCase();
@@ -100,10 +202,22 @@ export default function ProvidersView() {
     const resumeLabel = formData.keys[selectedKeyIndex]?.label;
     const resumeIndex = selectedKeyIndex;
     try {
-      await apiPut(`/api/provider-keys/${encodeURIComponent(providerId)}`, {
-        ...formData,
+      const nextFormData = applyCatalogEditorToFormData(catalogEditorValue);
+      providersEdit.setFormData(nextFormData);
+      const res = await apiPut(`/api/provider-keys/${encodeURIComponent(providerId)}`, {
+        ...nextFormData,
         provider: providerId,
       });
+      // Artificial delay to make the "Saving..." state perceivable and satisfying
+      await new Promise(resolve => setTimeout(resolve, 800));
+      // Give a brief visual feedback before closing or updating
+      setActionFeedback({
+        target: 'save',
+        kind: 'connection',
+        ok: true,
+        msg: t('providers.save_success'),
+      });
+      
       const rows = await loadProviders();
       const fresh = rows?.find((p) => p.provider === providerId);
       if (fresh) {
@@ -113,6 +227,10 @@ export default function ProvidersView() {
           idx >= 0 ? idx : Math.min(resumeIndex, Math.max(fresh.keys.length - 1, 0)),
         );
       }
+      
+      window.setTimeout(() => {
+        setActionFeedback((cur) => (cur?.target === 'save' ? null : cur));
+      }, 3000);
     } catch (err: any) {
       console.error('Failed to save provider:', err);
       providersEdit.setError(err.message || t('providers.unknown_error'));
@@ -129,9 +247,10 @@ export default function ProvidersView() {
 
   const handleRefreshModelCatalog = async (providerId: string, keyId?: string) => {
     const targetId = keyId ? `${providerId}::${keyId}` : providerId;
-    setCatalogBusyTarget(targetId);
-    setCatalogFeedback({
-      provider: targetId,
+    setBusyAction({target: targetId, kind: 'catalog'});
+    setActionFeedback({
+      target: targetId,
+      kind: 'catalog',
       ok: true,
       msg: t('providers.refresh_catalog_loading'),
     });
@@ -147,13 +266,14 @@ export default function ProvidersView() {
         supported_models_count: number;
       }>(path, {}, {signal: abortCtl.signal});
       syncOk = true;
-      setCatalogFeedback({
-        provider: targetId,
+      setActionFeedback({
+        target: targetId,
+        kind: 'catalog',
         ok: true,
         msg: t('providers.refresh_catalog_success', {count: res.supported_models_count}),
       });
       window.setTimeout(() => {
-        setCatalogFeedback((cur) => (cur?.provider === targetId && cur.ok ? null : cur));
+        setActionFeedback((cur) => (cur?.target === targetId && cur.kind === 'catalog' && cur.ok ? null : cur));
       }, 10000);
     } catch (err: unknown) {
       let message = t('providers.unknown_error');
@@ -170,10 +290,10 @@ export default function ProvidersView() {
       } else if (err instanceof Error) {
         message = err.message;
       }
-      setCatalogFeedback({provider: targetId, ok: false, msg: message});
+      setActionFeedback({target: targetId, kind: 'catalog', ok: false, msg: message});
     } finally {
       window.clearTimeout(abortTimer);
-      setCatalogBusyTarget(null);
+      setBusyAction(null);
     }
     let rows: ProviderRow[] | null = null;
     try {
@@ -181,21 +301,85 @@ export default function ProvidersView() {
     } catch (e) {
       console.error('loadProviders after catalog refresh:', e);
     }
-    if (syncOk && rows) {
-      const snap = getProvidersEditSnapshot();
-      if (snap.showModal && snap.isEditing && snap.formData.provider === providerId) {
-        const fresh = rows.find((p) => p.provider === providerId);
-        if (fresh) {
-          providersEdit.openEdit(fresh);
-          if (keyId) {
-            const idx = fresh.keys.findIndex((k) => String(k.id) === String(keyId));
-            if (idx >= 0) setSelectedKeyIndex(idx);
-          } else {
-            setSelectedKeyIndex((i) => Math.min(i, Math.max(fresh.keys.length - 1, 0)));
-          }
-        }
+    if (syncOk) restoreFreshProviderIntoModal(rows, providerId, keyId);
+  };
+
+  const handleTestProviderConnection = async (providerId: string, keyId: string) => {
+    const targetId = `${providerId}::${keyId}`;
+    setBusyAction({target: targetId, kind: 'connection'});
+    setActionFeedback({
+      target: targetId,
+      kind: 'connection',
+      ok: true,
+      msg: t('providers.test_connection_loading'),
+    });
+
+    const abortCtl = new AbortController();
+    const abortTimer = window.setTimeout(() => abortCtl.abort(), 45_000);
+    let checked = false;
+    try {
+      const res = await apiPost<ProviderHealthCheckResponse>(
+        `/api/provider-keys/${encodeURIComponent(providerId)}/health-check`,
+        {},
+        {signal: abortCtl.signal},
+      );
+      checked = true;
+      const result = Array.isArray(res.results)
+        ? res.results.find((item) => String(item.provider_key_id) === String(keyId))
+        : undefined;
+      if (result?.ok) {
+        setActionFeedback({
+          target: targetId,
+          kind: 'connection',
+          ok: true,
+          msg: t('providers.test_connection_success', {model: result.probe_model || 'n/a'}),
+        });
+        window.setTimeout(() => {
+          setActionFeedback((cur) => (cur?.target === targetId && cur.kind === 'connection' && cur.ok ? null : cur));
+        }, 10000);
+      } else if (result) {
+        setActionFeedback({
+          target: targetId,
+          kind: 'connection',
+          ok: false,
+          msg: t('providers.test_connection_failed', {reason: result.error || `HTTP ${result.status}`}),
+        });
+      } else {
+        setActionFeedback({
+          target: targetId,
+          kind: 'connection',
+          ok: false,
+          msg: t('providers.test_connection_unavailable'),
+        });
       }
+    } catch (err: unknown) {
+      let message = t('providers.unknown_error');
+      const isAbort =
+        (typeof err === 'object' &&
+          err !== null &&
+          'name' in err &&
+          (err as {name?: string}).name === 'AbortError') ||
+        (err instanceof DOMException && err.name === 'AbortError');
+      if (isAbort) {
+        message = t('providers.test_connection_timeout');
+      } else if (err instanceof ApiError) {
+        message = err.message || message;
+      } else if (err instanceof Error) {
+        message = err.message;
+      }
+      setActionFeedback({target: targetId, kind: 'connection', ok: false, msg: message});
+    } finally {
+      window.clearTimeout(abortTimer);
+      setBusyAction(null);
     }
+
+    let rows: ProviderRow[] | null = null;
+    try {
+      rows = await loadProviders();
+    } catch (e) {
+      console.error('loadProviders after health check:', e);
+    }
+    if (checked) restoreFreshProviderIntoModal(rows, providerId, keyId);
   };
 
   if (!isAdmin) {
@@ -394,7 +578,7 @@ export default function ProvidersView() {
                           ...formData,
                           label,
                           provider: id,
-                          base_url: id ? `https://api.${id}.com/v1` : '',
+                          base_url: id ? `https://api.${id}.com` : '',
                           docs_url: id ? `https://platform.${id}.com/docs` : ''
                         });
                       } else {
@@ -417,13 +601,12 @@ export default function ProvidersView() {
                 />
               </div>
 
-              <p className="text-[11px] leading-relaxed text-zinc-500">{t('providers.catalog_sync_hint_modal')}</p>
-
               <div className="space-y-3 pt-4 border-t border-zinc-100">
-                <div className="flex items-center justify-between gap-3">
-                  <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">
-                    {t('providers.api_keys_cost_channels')}
-                  </label>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-1">
+                    <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('providers.api_channels')}</label>
+                    <p className="text-[11px] leading-relaxed text-zinc-500">{t('providers.catalog_sync_hint_modal')}</p>
+                  </div>
                   <button
                     type="button"
                     onClick={() => {
@@ -442,12 +625,10 @@ export default function ProvidersView() {
 
                 <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
                   <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-2">
-                    <div className="mb-2 px-2 pt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                      {t('providers.api_keys_cost_channels')}
-                    </div>
                     <div className="space-y-1.5">
                       {formData.keys.map((k, index) => {
                         const isSelected = index === selectedKeyIndex;
+                        const modelCount = Array.isArray(k.supported_models) ? k.supported_models.length : 0;
                         return (
                           <button
                             key={k.id || index}
@@ -474,7 +655,7 @@ export default function ProvidersView() {
                                   {k.status === 'active' ? t('providers.active') : t('providers.inactive')}
                                 </div>
                                 <div className="mt-0.5 text-[10px] text-zinc-400">
-                                  {t('providers.catalog_models_list')}
+                                  {t('providers.key_models_count', {count: modelCount})}
                                 </div>
                               </div>
                             </div>
@@ -493,7 +674,7 @@ export default function ProvidersView() {
                         )}
                       >
                           {!formData.keys[selectedKeyIndex].id ? (
-                            <p className="max-w-[min(100%,20rem)] text-[10px] leading-snug text-zinc-500">
+                            <p className="flex-1 min-w-0 text-[11px] leading-snug text-zinc-500 sm:whitespace-nowrap">
                               {t('providers.sync_requires_save_hint')}
                             </p>
                           ) : null}
@@ -501,11 +682,22 @@ export default function ProvidersView() {
                           {formData.keys[selectedKeyIndex].id && (
                             <button
                               type="button"
-                              onClick={() => handleRefreshModelCatalog(formData.provider, formData.keys[selectedKeyIndex].id as string)}
-                              disabled={catalogBusyTarget === `${formData.provider}::${formData.keys[selectedKeyIndex].id}`}
+                              onClick={() => handleTestProviderConnection(formData.provider, formData.keys[selectedKeyIndex].id as string)}
+                              disabled={busyAction?.target === `${formData.provider}::${formData.keys[selectedKeyIndex].id}`}
                               className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[10px] font-semibold text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-50"
                             >
-                              <RefreshCw size={11} className={catalogBusyTarget === `${formData.provider}::${formData.keys[selectedKeyIndex].id}` ? 'animate-spin' : ''} />
+                              <RefreshCw size={11} className={busyAction?.target === `${formData.provider}::${formData.keys[selectedKeyIndex].id}` && busyAction.kind === 'connection' ? 'animate-spin' : ''} />
+                              {t('providers.test_connection')}
+                            </button>
+                          )}
+                          {formData.keys[selectedKeyIndex].id && (
+                            <button
+                              type="button"
+                              onClick={() => handleRefreshModelCatalog(formData.provider, formData.keys[selectedKeyIndex].id as string)}
+                              disabled={busyAction?.target === `${formData.provider}::${formData.keys[selectedKeyIndex].id}`}
+                              className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[10px] font-semibold text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-50"
+                            >
+                              <RefreshCw size={11} className={busyAction?.target === `${formData.provider}::${formData.keys[selectedKeyIndex].id}` && busyAction.kind === 'catalog' ? 'animate-spin' : ''} />
                               {t('providers.refresh_catalog')}
                             </button>
                           )}
@@ -603,27 +795,29 @@ export default function ProvidersView() {
 
                         <div className="flex min-h-0 min-w-0 flex-col gap-1.5 xl:h-full">
                           <label className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                            {t('providers.catalog_models_list')}
+                            {t('providers.catalog_models_editor')}
                           </label>
-                          <div
-                            role="list"
-                            className="min-h-[8rem] w-full flex-1 basis-0 overflow-y-auto overflow-x-hidden rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 [scrollbar-gutter:stable]"
-                          >
-                            {(() => {
-                              const models = Array.isArray(formData.keys[selectedKeyIndex].supported_models)
-                                ? formData.keys[selectedKeyIndex].supported_models!
-                                : [];
-                              if (models.length === 0) {
-                                return (
-                                  <p className="text-xs leading-relaxed text-zinc-400">{t('providers.catalog_empty')}</p>
-                                );
-                              }
-                              return models.map((id, idx) => (
-                                <div key={`${id}-${idx}`} role="listitem" className="font-mono text-[12px] leading-6 text-zinc-800">
-                                  {id}
-                                </div>
-                              ));
-                            })()}
+                          <p className="text-[11px] leading-relaxed text-zinc-500">
+                            {t('providers.catalog_manual_hint')}
+                          </p>
+                          <textarea
+                            value={catalogEditorValue}
+                            onChange={(e) => setCatalogEditorValue(e.target.value)}
+                            onBlur={(e) => {
+                              const nextValue = e.target.value;
+                              const nextFormData = applyCatalogEditorToFormData(nextValue);
+                              providersEdit.setFormData(nextFormData);
+                              setCatalogEditorValue(serializeSupportedModels(nextFormData.keys[selectedKeyIndex]?.supported_models));
+                            }}
+                            placeholder={t('providers.supported_models_placeholder')}
+                            spellCheck={false}
+                            className="min-h-[12rem] w-full flex-1 resize-y rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 font-mono text-[12px] leading-6 text-zinc-800 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                          />
+                          <div className="flex items-center justify-between gap-3 text-[11px] text-zinc-500">
+                            <span>{t('providers.catalog_models_list')}</span>
+                            <span className="tabular-nums">
+                              {t('providers.key_models_count', {count: parseSupportedModels(catalogEditorValue).length})}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -638,7 +832,7 @@ export default function ProvidersView() {
                 className="text-[13px] font-bold text-zinc-500 hover:text-zinc-900 px-3"
                 disabled={saving}
               >
-                {t('providers.cancel')}
+                {t('common.close')}
               </button>
               <button
                 onClick={handleSaveProvider}
@@ -662,25 +856,25 @@ export default function ProvidersView() {
         </div>
       </Dialog>
 
-      {catalogFeedback ? (
+      {actionFeedback ? (
         <div
           role="status"
           aria-live="polite"
           className={clsx(
             'pointer-events-none fixed bottom-6 left-1/2 z-[70] flex w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 items-start gap-2.5 rounded-xl border px-4 py-3 text-[13px] shadow-lg',
-            catalogToastLoading && 'border-blue-200 bg-blue-50/95 text-blue-900',
-            !catalogToastLoading && catalogFeedback.ok && 'border-emerald-200 bg-emerald-50/95 text-emerald-900',
-            !catalogToastLoading && !catalogFeedback.ok && 'border-red-200 bg-red-50/95 text-red-900',
+            actionToastLoading && 'border-blue-200 bg-blue-50/95 text-blue-900',
+            !actionToastLoading && actionFeedback.ok && 'border-emerald-200 bg-emerald-50/95 text-emerald-900',
+            !actionToastLoading && !actionFeedback.ok && 'border-red-200 bg-red-50/95 text-red-900',
           )}
         >
-          {catalogToastLoading ? (
+          {actionToastLoading ? (
             <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 animate-spin" aria-hidden />
-          ) : catalogFeedback.ok ? (
+          ) : actionFeedback.ok ? (
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
           ) : (
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           )}
-          <p className="min-w-0 flex-1 leading-snug font-medium">{catalogFeedback.msg}</p>
+          <p className="min-w-0 flex-1 leading-snug font-medium">{actionFeedback.msg}</p>
         </div>
       ) : null}
     </div>

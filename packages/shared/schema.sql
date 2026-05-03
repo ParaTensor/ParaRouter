@@ -116,10 +116,37 @@ CREATE TABLE IF NOT EXISTS activity (
   latency INTEGER NOT NULL DEFAULT 0,
   status INTEGER NOT NULL DEFAULT 200,
   user_id TEXT,
-  cost TEXT
+  cost TEXT,
+  request_correlation_id TEXT,
+  provider_account_id TEXT,
+  provider_key_id TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_activity_user_id ON activity(user_id);
+CREATE INDEX IF NOT EXISTS idx_activity_request_correlation_id ON activity(request_correlation_id);
+CREATE INDEX IF NOT EXISTS idx_activity_provider_account_id ON activity(provider_account_id);
+CREATE INDEX IF NOT EXISTS idx_activity_provider_key_id ON activity(provider_key_id);
+
+CREATE TABLE IF NOT EXISTS stream_observations (
+  id BIGSERIAL PRIMARY KEY,
+  timestamp BIGINT NOT NULL,
+  route TEXT NOT NULL,
+  requested_model TEXT NOT NULL,
+  request_correlation_id TEXT,
+  provider_account_id TEXT,
+  provider_key_id TEXT,
+  ttft_ms INTEGER,
+  max_inter_chunk_ms INTEGER,
+  chunk_count BIGINT NOT NULL DEFAULT 0,
+  stream_duration_ms INTEGER NOT NULL DEFAULT 0,
+  completed_normally BOOLEAN NOT NULL DEFAULT false
+);
+
+CREATE INDEX IF NOT EXISTS idx_stream_observations_timestamp ON stream_observations(timestamp);
+CREATE INDEX IF NOT EXISTS idx_stream_observations_model ON stream_observations(requested_model);
+CREATE INDEX IF NOT EXISTS idx_stream_observations_request_correlation_id ON stream_observations(request_correlation_id);
+CREATE INDEX IF NOT EXISTS idx_stream_observations_provider_account_id ON stream_observations(provider_account_id);
+CREATE INDEX IF NOT EXISTS idx_stream_observations_provider_key_id ON stream_observations(provider_key_id);
 
 CREATE TABLE IF NOT EXISTS gateways (
   instance_id TEXT PRIMARY KEY,

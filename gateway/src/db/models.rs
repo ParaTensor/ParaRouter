@@ -208,6 +208,9 @@ pub struct NewActivityRecord {
     pub status: i32,
     pub user_id: String,
     pub cost: String,
+    pub request_correlation_id: Option<String>,
+    pub provider_account_id: Option<String>,
+    pub provider_key_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -220,6 +223,9 @@ pub struct ActivityRecord {
     pub status: i32,
     pub user_id: Option<String>,
     pub cost: Option<String>,
+    pub request_correlation_id: Option<String>,
+    pub provider_account_id: Option<String>,
+    pub provider_key_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]

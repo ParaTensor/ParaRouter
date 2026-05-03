@@ -7,6 +7,7 @@ use axum::{
     Json,
 };
 use axum::body::Body;
+use uuid::Uuid;
 
 use unigateway_sdk::core::ExecutionTarget;
 use unigateway_sdk::host::{
@@ -22,20 +23,30 @@ use crate::runtime::ParaRouterRuntime;
 use crate::translators::anthropic::{
     into_core_chat_request, PermissiveAnthropicRequest,
 };
+use crate::usage::health::mark_provider_key_unhealthy;
+use crate::usage::stream::{observe_sse_body, StreamObservationLabels, StreamObservationSink};
 
 /// Convert a ProtocolHttpResponse into an axum::Response.
-fn into_axum_response(response: ProtocolHttpResponse) -> Response {
+fn into_axum_response(
+    response: ProtocolHttpResponse,
+    stream_observation: Option<(Arc<dyn StreamObservationSink>, StreamObservationLabels)>,
+) -> Response {
     let (status, body) = response.into_parts();
     match body {
         ProtocolResponseBody::Json(value) => {
             (status, axum::Json(value)).into_response()
         }
         ProtocolResponseBody::ServerSentEvents(stream) => {
+            let body = match stream_observation {
+                Some((sink, labels)) => observe_sse_body(stream, sink, labels),
+                None => Body::from_stream(stream),
+            };
+
             Response::builder()
                 .status(status)
                 .header("content-type", "text/event-stream")
                 .header("cache-control", "no-cache")
-                .body(Body::from_stream(stream))
+                .body(body)
                 .unwrap_or_else(|e| {
                     (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
                 })
@@ -94,6 +105,11 @@ pub async fn messages(
     }
 
     // Annotate metadata securely from Auth layer
+    let request_correlation_id = Uuid::new_v4().to_string();
+    request.metadata.insert(
+        "request_correlation_id".to_string(),
+        request_correlation_id.clone(),
+    );
     request.metadata.insert("user_id".to_string(), auth.uid.clone());
     request.metadata.insert("key_id".to_string(), auth.key_id.clone());
     request.metadata.insert("requested_model".to_string(), request.model.clone());
@@ -124,6 +140,24 @@ pub async fn messages(
         }
     };
 
+    request.metadata.insert(
+        "resolved_provider_account_id".to_string(),
+        service_id.clone(),
+    );
+    if let Some(endpoint_hint) = &resolved.endpoint_hint {
+        request.metadata.insert(
+            "resolved_provider_key_id".to_string(),
+            endpoint_hint.clone(),
+        );
+    }
+    let stream_labels = StreamObservationLabels::new(
+        "anthropic.messages",
+        request.model.clone(),
+        Some(request_correlation_id),
+        Some(service_id.clone()),
+        resolved.endpoint_hint.clone(),
+    );
+
     // Stage 3: Execution via HostContext and dispatch_request
     let ctx = HostContext::from_parts(&runtime.engine, &*runtime);
     match dispatch_request(
@@ -136,7 +170,10 @@ pub async fn messages(
     .await
     {
         Ok(outcome) => match outcome {
-            HostDispatchOutcome::Response(response) => into_axum_response(response),
+            HostDispatchOutcome::Response(response) => into_axum_response(
+                response,
+                Some((runtime.stream_observation_sink.clone(), stream_labels)),
+            ),
             HostDispatchOutcome::PoolNotFound => (
                 StatusCode::NOT_FOUND,
                 "Pool mapping not found",
@@ -148,6 +185,9 @@ pub async fn messages(
             )
                 .into_response(),
         },
-        Err(err) => error_response_for_host_error(&err),
+        Err(err) => {
+            mark_provider_key_unhealthy(&runtime.db, resolved.endpoint_hint.as_deref(), &err.to_string()).await;
+            error_response_for_host_error(&err)
+        }
     }
 }

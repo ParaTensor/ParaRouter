@@ -1,5 +1,5 @@
 import { pool } from './db';
-import { sendEmail } from './utils';
+import { fetchProviderSupportedModelsWithLog, sendEmail } from './utils';
 
 type ProviderAccountRow = {
   id: string;
@@ -29,6 +29,14 @@ type ProbeTargetRow = {
 
 type CatalogTargetRow = {
   supported_models: unknown;
+  account_supported_models?: unknown;
+  base_url?: string;
+  api_key?: string;
+};
+
+type LoadedProbeTargets = {
+  targets: ProbeTargetRow[];
+  error: string | null;
 };
 
 export type ProviderHealthCheckResult = {
@@ -69,7 +77,41 @@ function buildOpenAiEndpoint(baseUrl: string, path: string) {
   return `${normalized}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
-async function loadProbeTargets(providerAccountId: string, providerKeyId: string) {
+export function normalizeProbeModelIds(raw: unknown) {
+  if (!Array.isArray(raw)) return [] as string[];
+
+  const ids = new Set<string>();
+  for (const item of raw) {
+    const normalized = String(item || '').trim();
+    if (normalized) {
+      ids.add(normalized);
+    }
+  }
+  return Array.from(ids);
+}
+
+export function buildAnthropicProbeUrls(baseUrl: string) {
+  const normalized = String(baseUrl || '').trim().replace(/\/+$/, '');
+  if (!normalized) return [] as string[];
+
+  const urls: string[] = [];
+  const add = (url: string) => {
+    if (!urls.includes(url)) {
+      urls.push(url);
+    }
+  };
+
+  if (/\/v\d+(?:beta\d+)?$/i.test(normalized)) {
+    add(`${normalized}/messages`);
+  } else {
+    add(`${normalized}/v1/messages`);
+    add(`${normalized}/messages`);
+  }
+
+  return urls;
+}
+
+async function loadProbeTargets(providerAccountId: string, providerKeyId: string): Promise<LoadedProbeTargets> {
   const stateResult = await pool.query(
     'SELECT current_version FROM pricing_state WHERE id = 1',
   );
@@ -85,20 +127,66 @@ async function loadProbeTargets(providerAccountId: string, providerKeyId: string
     [providerAccountId, providerKeyId, currentVersion],
   );
   if (rows.length > 0) {
-    return rows;
+    return { targets: rows, error: null };
   }
 
   const catalogRows = await pool.query<CatalogTargetRow>(
-    `SELECT COALESCE(supported_models, '[]'::jsonb) AS supported_models
-     FROM provider_api_keys
-     WHERE id = $1 AND provider_account_id = $2 AND status = 'active'
+    `SELECT
+        COALESCE(k.supported_models, '[]'::jsonb) AS supported_models,
+        COALESCE(a.supported_models, '[]'::jsonb) AS account_supported_models,
+        COALESCE(a.base_url, '') AS base_url,
+        COALESCE(k.api_key, '') AS api_key
+     FROM provider_api_keys k
+     JOIN provider_accounts a ON a.id = k.provider_account_id
+     WHERE k.id = $1 AND k.provider_account_id = $2 AND k.status = 'active'
      LIMIT 1`,
     [providerKeyId, providerAccountId],
   );
-  const supportedModels = Array.isArray(catalogRows.rows[0]?.supported_models)
-    ? catalogRows.rows[0].supported_models.map((item) => String(item || '').trim()).filter(Boolean)
-    : [];
-  return supportedModels.map((model_id) => ({ model_id, provider_model_id: null }));
+
+  const catalogRow = catalogRows.rows[0];
+  if (!catalogRow) {
+    return { targets: [], error: 'Provider key not found or inactive' };
+  }
+
+  const keySupportedModels = normalizeProbeModelIds(catalogRow.supported_models);
+  const accountSupportedModels = normalizeProbeModelIds(catalogRow.account_supported_models);
+  const persistedModels = keySupportedModels.length > 0 ? keySupportedModels : accountSupportedModels;
+  if (persistedModels.length > 0) {
+    return {
+      targets: persistedModels.map((model_id) => ({ model_id, provider_model_id: null })),
+      error: null,
+    };
+  }
+
+  const baseUrl = String(catalogRow.base_url || '').trim();
+  const apiKey = String(catalogRow.api_key || '').trim();
+  if (!baseUrl || !apiKey) {
+    return { targets: [], error: 'Missing base URL or API key for probe catalog fetch' };
+  }
+
+  const { models, error } = await fetchProviderSupportedModelsWithLog(baseUrl, apiKey);
+  const fetchedModels = normalizeProbeModelIds(models);
+  if (error || fetchedModels.length === 0) {
+    return {
+      targets: [],
+      error: error || 'No active model mapping found and upstream model catalog is empty',
+    };
+  }
+
+  const now = Date.now();
+  await pool.query(
+    `UPDATE provider_api_keys
+     SET supported_models = $3::jsonb,
+         supported_models_updated_at = $4,
+         updated_at = $4
+     WHERE id = $1 AND provider_account_id = $2`,
+    [providerKeyId, providerAccountId, JSON.stringify(fetchedModels), now],
+  );
+
+  return {
+    targets: fetchedModels.map((model_id) => ({ model_id, provider_model_id: null })),
+    error: null,
+  };
 }
 
 async function probeOpenAiCompatible(baseUrl: string, apiKey: string, model: string) {
@@ -139,38 +227,65 @@ async function probeOpenAiCompatible(baseUrl: string, apiKey: string, model: str
 }
 
 async function probeAnthropic(baseUrl: string, apiKey: string, model: string) {
-  const url = buildOpenAiEndpoint(baseUrl, '/messages');
-  if (!url) {
+  const urls = buildAnthropicProbeUrls(baseUrl);
+  if (urls.length === 0) {
     return { ok: false, status: 500, error: 'invalid base url' };
   }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
   try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 16,
-        messages: [
-          {
-            role: 'user',
-            content: [{ type: 'text', text: 'Reply with exactly: ok' }],
-          },
-        ],
-      }),
-      signal: controller.signal,
-    });
-    const body = await response.text();
+    let lastStatus = 0;
+    let lastError = 'anthropic probe failed';
+
+    for (const url of urls) {
+      const headerVariants: Record<string, string>[] = [
+        {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
+        },
+        {
+          Authorization: `Bearer ${apiKey}`,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
+        },
+      ];
+
+      for (const headers of headerVariants) {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            model,
+            max_tokens: 16,
+            messages: [
+              {
+                role: 'user',
+                content: [{ type: 'text', text: 'Reply with exactly: ok' }],
+              },
+            ],
+          }),
+          signal: controller.signal,
+        });
+        const body = await response.text();
+        if (response.ok) {
+          return {
+            ok: true,
+            status: response.status,
+            error: null,
+          };
+        }
+
+        lastStatus = response.status;
+        lastError = body.slice(0, 500) || `POST ${url} failed: HTTP ${response.status}`;
+      }
+    }
+
     return {
-      ok: response.ok,
-      status: response.status,
-      error: response.ok ? null : body.slice(0, 500),
+      ok: false,
+      status: lastStatus,
+      error: lastError,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -240,14 +355,18 @@ function escapeHtml(value: string) {
     .replace(/'/g, '&#39;');
 }
 
-async function runProbeForKey(row: ProviderAccountRow & ProviderKeyRow, probeTarget: ProbeTargetRow | null): Promise<ProviderHealthCheckResult> {
+async function runProbeForKey(
+  row: ProviderAccountRow & ProviderKeyRow,
+  probeTarget: ProbeTargetRow | null,
+  missingProbeError?: string | null,
+): Promise<ProviderHealthCheckResult> {
   const checkedAt = Date.now();
   const providerType = String(row.provider_type || '').trim().toLowerCase();
   const probeModel = probeTarget ? (probeTarget.provider_model_id?.trim() || probeTarget.model_id) : null;
   const previousHealthStatus = String(row.health_status || 'unknown').toLowerCase();
 
   if (!probeModel) {
-    const error = 'No active model mapping found for this provider key';
+    const error = missingProbeError || 'No active model mapping found for this provider key';
     await pool.query(
       `UPDATE provider_api_keys
        SET health_status = 'unhealthy',
@@ -388,9 +507,9 @@ export async function runProviderHealthChecks(providerAccountId?: string) {
 
   const results: ProviderHealthCheckResult[] = [];
   for (const row of rows) {
-    const targets = await loadProbeTargets(row.provider_account_id, row.id);
+    const { targets, error } = await loadProbeTargets(row.provider_account_id, row.id);
     const probeTarget = targets[0] || null;
-    results.push(await runProbeForKey(row, probeTarget));
+    results.push(await runProbeForKey(row, probeTarget, error));
   }
 
   return results;

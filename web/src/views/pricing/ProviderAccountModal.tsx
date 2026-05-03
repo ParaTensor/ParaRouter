@@ -17,7 +17,7 @@ export default function ProviderAccountModal({ isOpen, onClose, onSuccess }: Pro
   const [newProvider, setNewProvider] = React.useState({
     provider: '',
     label: '',
-    base_url: 'https://api.openai.com/v1',
+    base_url: 'https://api.openai.com',
     docs_url: 'https://platform.openai.com/docs',
     key: '',
     status: 'active',
@@ -29,7 +29,7 @@ export default function ProviderAccountModal({ isOpen, onClose, onSuccess }: Pro
       setNewProvider({
         provider: '',
         label: '',
-        base_url: 'https://api.openai.com/v1',
+        base_url: 'https://api.openai.com',
         docs_url: 'https://platform.openai.com/docs',
         key: '',
         status: 'active',
@@ -95,7 +95,7 @@ export default function ProviderAccountModal({ isOpen, onClose, onSuccess }: Pro
                   ...prev,
                   label,
                   provider: slug,
-                  base_url: slug ? `https://api.${slug}.com/v1` : prev.base_url
+                  base_url: slug ? `https://api.${slug}.com` : prev.base_url
                 }));
               }}
               placeholder={t('provideraccountmodal.placeholder_label')}
@@ -111,11 +111,11 @@ export default function ProviderAccountModal({ isOpen, onClose, onSuccess }: Pro
                 value={newProvider.driver_type}
                 onChange={(val) => {
                   const updates: Record<string, string> = { driver_type: val };
-                  if (val === 'anthropic' && newProvider.base_url === 'https://api.openai.com/v1') {
-                    updates.base_url = 'https://api.anthropic.com/v1';
+                  if (val === 'anthropic' && newProvider.base_url === 'https://api.openai.com') {
+                    updates.base_url = 'https://api.anthropic.com';
                     updates.docs_url = 'https://docs.anthropic.com/en/api/getting-started';
-                  } else if (val === 'openai_compatible' && newProvider.base_url === 'https://api.anthropic.com/v1') {
-                    updates.base_url = 'https://api.openai.com/v1';
+                  } else if (val === 'openai_compatible' && newProvider.base_url === 'https://api.anthropic.com') {
+                    updates.base_url = 'https://api.openai.com';
                     updates.docs_url = 'https://platform.openai.com/docs';
                   }
                   setNewProvider(prev => ({...prev, ...updates}));

@@ -25,6 +25,7 @@ import customersRouter from './routes/customers';
 import { startProviderHealthMonitor } from './provider_health';
 
 const PORT = Number(process.env.PORT || 3322);
+const WEB_DEV_ORIGIN = process.env.WEB_DEV_ORIGIN || 'http://127.0.0.1:5173';
 
 async function startServer() {
   await initSchema();
@@ -91,6 +92,11 @@ async function startServer() {
       appType: 'spa',
     });
     app.use(vite.middlewares);
+  } else if (process.env.NODE_ENV !== 'production' && disableEmbeddedVite) {
+    app.get('*', (req, res) => {
+      const target = new URL(req.originalUrl || req.url, WEB_DEV_ORIGIN).toString();
+      res.redirect(307, target);
+    });
   } else {
     const distPath = path.join(__dirname, '../dist');
     app.use(express.static(distPath));

@@ -51,10 +51,31 @@ router.get('/config', async (_req, res) => {
 });
 
 router.post('/usage', async (req, res) => {
-  const { model, tokens, latency, status, user_id, cost } = req.body || {};
+  const {
+    model,
+    tokens,
+    latency,
+    status,
+    user_id,
+    cost,
+    request_correlation_id,
+    provider_account_id,
+    provider_key_id,
+  } = req.body || {};
   await pool.query(
-    `INSERT INTO activity (timestamp, model, tokens, latency, status, user_id, cost)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    `INSERT INTO activity (
+      timestamp,
+      model,
+      tokens,
+      latency,
+      status,
+      user_id,
+      cost,
+      request_correlation_id,
+      provider_account_id,
+      provider_key_id
+    )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
     [
       Date.now(),
       model || 'unknown',
@@ -63,6 +84,9 @@ router.post('/usage', async (req, res) => {
       Number(status || 200),
       user_id || 'system',
       cost || '$0.00',
+      request_correlation_id || null,
+      provider_account_id || null,
+      provider_key_id || null,
     ],
   );
   res.json({ status: 'received' });

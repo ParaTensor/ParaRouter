@@ -53,7 +53,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
   const { where, params, paramIndex } = buildWhereClauses(targetUserId, search, startTime, endTime);
 
   try {
-    const listQuery = `SELECT id, timestamp, model, tokens, latency, status, user_id, cost FROM activity ${where} ORDER BY timestamp DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    const listQuery = `SELECT id, timestamp, model, tokens, latency, status, user_id, cost, request_correlation_id, provider_account_id, provider_key_id FROM activity ${where} ORDER BY timestamp DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
     const listParams = [...params, limit, offset];
 
     const countQuery = `SELECT COUNT(*) as total FROM activity ${where}`;

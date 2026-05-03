@@ -8,6 +8,12 @@ export type ProviderKey = {
   label: string;
   key: string;
   status: string;
+  health_status?: string | null;
+  health_checked_at?: number | string | null;
+  health_last_ok_at?: number | string | null;
+  health_error?: string | null;
+  health_fail_count?: number | null;
+  health_alert_sent_at?: number | string | null;
   supported_models?: string[];
   supported_models_updated_at?: number | string | null;
 };
@@ -95,7 +101,7 @@ export const providersEdit = {
         ...DEFAULT_PROVIDER,
         provider: 'openai',
         label: 'OpenAI',
-        base_url: 'https://api.openai.com/v1',
+        base_url: 'https://api.openai.com',
         docs_url: 'https://platform.openai.com/docs',
         keys: [{ label: 'Default', key: '', status: 'active', supported_models: [] }],
       },
