@@ -155,6 +155,7 @@ pub fn into_core_chat_request(
         tools: permissive.tools,
         tool_choice: permissive.tool_choice,
         raw_messages: Some(raw_messages),
+        extra: HashMap::new(),
         metadata,
     })
 }

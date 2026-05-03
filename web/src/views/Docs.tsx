@@ -59,6 +59,12 @@ const client = new OpenAI({
     {nameKey: 'docs.param_provider', descKey: 'docs.param_provider_desc'},
   ] as const;
 
+  const reasoningTips = [
+    t('docs.reasoning_tip_1'),
+    t('docs.reasoning_tip_2'),
+    t('docs.reasoning_tip_3'),
+  ];
+
   const tocItems = [
     {id: SECTION_IDS.intro, labelKey: 'docs.intro_title'},
     {id: SECTION_IDS.integration, labelKey: 'docs.integration_title'},
@@ -263,6 +269,19 @@ const client = new OpenAI({
                   ))}
                 </tbody>
               </table>
+            </div>
+            <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 sm:p-5 space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold text-amber-950">{t('docs.reasoning_title')}</h3>
+                <p className="mt-1 text-sm text-amber-900/80">{t('docs.reasoning_intro')}</p>
+              </div>
+              <div className="space-y-2" role="list">
+                {reasoningTips.map((tip) => (
+                  <p key={tip} className="text-sm leading-relaxed text-amber-950/90" role="listitem">
+                    {tip}
+                  </p>
+                ))}
+              </div>
             </div>
           </section>
 
