@@ -573,22 +573,6 @@ export default function ProvidersView() {
             )}
 
             <div className="flex-1 overflow-auto px-5 py-5 space-y-4">
-
-
-              {!isEditing && (
-                <div className="max-w-[240px] min-w-0 space-y-2">
-                  <div className="min-w-0 space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('providers.provider_id')}</label>
-                    <input
-                      value={formData.provider}
-                      onChange={(e) => providersEdit.setFormData({...formData, provider: e.target.value})}
-                      placeholder={t('providers.placeholder_id')}
-                      className="w-full min-w-0 px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
-                    />
-                  </div>
-                </div>
-              )}
-
               <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4">
                 <div className={`grid gap-3 ${providerSettingsGridClass}`}>
                   <div className="min-w-0 space-y-2">
