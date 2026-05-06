@@ -72,10 +72,40 @@ function normalizeBaseUrl(baseUrl: string) {
   }
 }
 
-function buildOpenAiEndpoint(baseUrl: string, path: string) {
+function buildTrailingApiV1FallbackBaseUrl(baseUrl: string) {
+  const trimmed = String(baseUrl || '').trim().replace(/\/+$/, '');
+  if (!trimmed || !/\/api$/i.test(trimmed)) return '';
+
+  try {
+    const parsed = new URL(trimmed);
+    const withoutApi = parsed.pathname.replace(/\/api$/i, '') || '/';
+    parsed.pathname = withoutApi === '/' ? '/v1' : `${withoutApi.replace(/\/+$/, '')}/v1`;
+    return parsed.toString().replace(/\/+$/, '');
+  } catch {
+    return trimmed.replace(/\/api$/i, '/v1');
+  }
+}
+
+export function buildOpenAiProbeUrls(baseUrl: string, path: string) {
   const normalized = normalizeBaseUrl(baseUrl);
-  if (!normalized) return '';
-  return `${normalized}${path.startsWith('/') ? path : `/${path}`}`;
+  if (!normalized) return [] as string[];
+
+  const suffix = path.startsWith('/') ? path : `/${path}`;
+  const urls: string[] = [];
+  const add = (url: string) => {
+    if (!urls.includes(url)) {
+      urls.push(url);
+    }
+  };
+
+  add(`${normalized}${suffix}`);
+
+  const fallbackBaseUrl = buildTrailingApiV1FallbackBaseUrl(baseUrl);
+  if (fallbackBaseUrl) {
+    add(`${fallbackBaseUrl}${suffix}`);
+  }
+
+  return urls;
 }
 
 export function normalizeProbeModelIds(raw: unknown) {
@@ -191,40 +221,51 @@ async function loadProbeTargets(providerAccountId: string, providerKeyId: string
 }
 
 async function probeOpenAiCompatible(baseUrl: string, apiKey: string, model: string) {
-  const url = buildOpenAiEndpoint(baseUrl, '/chat/completions');
-  if (!url) {
+  const urls = buildOpenAiProbeUrls(baseUrl, '/chat/completions');
+  if (urls.length === 0) {
     return { ok: false, status: 500, error: 'invalid base url' };
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'user', content: 'Reply with exactly: ok' }],
-        max_tokens: 16,
-        stream: false,
-      }),
-      signal: controller.signal,
-    });
-    const body = await response.text();
-    return {
-      ok: response.ok,
-      status: response.status,
-      error: response.ok ? null : body.slice(0, 500),
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, status: 0, error: message };
-  } finally {
-    clearTimeout(timeout);
+  let lastStatus = 0;
+  let lastError = 'openai-compatible probe failed';
+
+  for (const url of urls) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: 'Reply with exactly: ok' }],
+          max_tokens: 16,
+          stream: false,
+        }),
+        signal: controller.signal,
+      });
+      const body = await response.text();
+      if (response.ok) {
+        return {
+          ok: true,
+          status: response.status,
+          error: null,
+        };
+      }
+      lastStatus = response.status;
+      lastError = body.slice(0, 500) || `HTTP ${response.status}`;
+    } catch (error) {
+      lastStatus = 0;
+      lastError = error instanceof Error ? error.message : String(error);
+    } finally {
+      clearTimeout(timeout);
+    }
   }
+
+  return { ok: false, status: lastStatus, error: lastError };
 }
 
 async function probeAnthropic(baseUrl: string, apiKey: string, model: string) {
@@ -333,18 +374,25 @@ async function alertAdmins(params: {
     </ul>
   `;
 
-  await sendEmail({
-    to: recipients,
-    subject,
-    html,
-    text: [
-      'Provider health check failed.',
-      `Provider account: ${params.providerAccountId} (${params.providerLabel})`,
-      `Provider key: ${params.providerKeyLabel}`,
-      `Probe model: ${params.probeModel || 'n/a'}`,
-      `Error: ${params.error}`,
-    ].join('\n'),
-  });
+  try {
+    await sendEmail({
+      to: recipients,
+      subject,
+      html,
+      text: [
+        'Provider health check failed.',
+        `Provider account: ${params.providerAccountId} (${params.providerLabel})`,
+        `Provider key: ${params.providerKeyLabel}`,
+        `Probe model: ${params.probeModel || 'n/a'}`,
+        `Error: ${params.error}`,
+      ].join('\n'),
+    });
+  } catch (error) {
+    console.error(
+      `Provider health alert email failed for ${params.providerAccountId}/${params.providerKeyLabel}:`,
+      error,
+    );
+  }
 }
 
 function escapeHtml(value: string) {

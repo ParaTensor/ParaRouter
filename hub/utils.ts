@@ -218,6 +218,21 @@ function looksLikeHtmlPayload(contentType: string | null, rawBody: string) {
   );
 }
 
+function buildTrailingApiV1FallbackBaseUrl(normalizedBaseUrl: string) {
+  if (!/\/api$/i.test(normalizedBaseUrl)) {
+    return '';
+  }
+
+  try {
+    const url = new URL(normalizedBaseUrl);
+    const withoutApi = url.pathname.replace(/\/api$/i, '') || '/';
+    url.pathname = withoutApi === '/' ? '/v1' : `${withoutApi.replace(/\/+$/, '')}/v1`;
+    return url.toString().replace(/\/+$/, '');
+  } catch {
+    return normalizedBaseUrl.replace(/\/api$/i, '/v1');
+  }
+}
+
 function buildProviderModelCatalogUrls(normalizedBaseUrl: string) {
   const ordered: string[] = [];
   const add = (url: string) => {
@@ -227,6 +242,10 @@ function buildProviderModelCatalogUrls(normalizedBaseUrl: string) {
   };
   if (!/\/v\d+(?:beta\d+)?$/i.test(normalizedBaseUrl)) {
     add(`${normalizedBaseUrl}/v1/models`);
+  }
+  const trailingApiV1FallbackBaseUrl = buildTrailingApiV1FallbackBaseUrl(normalizedBaseUrl);
+  if (trailingApiV1FallbackBaseUrl) {
+    add(`${trailingApiV1FallbackBaseUrl}/models`);
   }
   add(`${normalizedBaseUrl}/models`);
   if (!/\/api$/i.test(normalizedBaseUrl)) {
