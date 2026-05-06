@@ -111,7 +111,7 @@ export const providersEdit = {
         driver_type: 'openai_compatible',
         reasoning_text_encoding: '',
         reasoning_text_model_scope: 'none',
-        base_url: 'https://api.openai.com',
+        base_url: 'https://api.openai.com/v1',
         docs_url: 'https://platform.openai.com/docs',
         keys: [{ label: 'Default', key: '', status: 'active', supported_models: [] }],
       },

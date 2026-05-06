@@ -76,6 +76,19 @@ function areSupportedModelsEqual(left: string[], right: string[]) {
   return left.length === right.length && left.every((item, index) => item === right[index]);
 }
 
+function hasVersionedApiBasePath(baseUrl: string) {
+  const trimmed = String(baseUrl || '').trim();
+  if (!trimmed) return false;
+
+  try {
+    const url = new URL(trimmed);
+    const path = url.pathname.replace(/\/+$/, '') || '/';
+    return /\/v\d+(?:beta\d+)?$/i.test(path);
+  } catch {
+    return /\/v\d+(?:beta\d+)?$/i.test(trimmed.replace(/\/+$/, ''));
+  }
+}
+
 const providerProtocolOptions = [
   { value: 'openai_compatible', label: 'OpenAI' },
   { value: 'anthropic', label: 'Anthropic' },
@@ -215,6 +228,10 @@ export default function ProvidersView() {
     if (!isEditing && formData.keys.every((k) => !k.key.trim())) {
         providersEdit.setError(t('providers.error_key_required'));
         return;
+    }
+    if (!hasVersionedApiBasePath(formData.base_url || '')) {
+      providersEdit.setError(t('providers.error_base_url_requires_version'));
+      return;
     }
     
     setSaving(true);
@@ -587,7 +604,7 @@ export default function ProvidersView() {
                             ...formData,
                             label,
                             provider: id,
-                            base_url: id ? `https://api.${id}.com` : '',
+                            base_url: id ? `https://api.${id}.com/v1` : '',
                             docs_url: id ? `https://platform.${id}.com/docs` : ''
                           });
                         } else {
@@ -607,6 +624,7 @@ export default function ProvidersView() {
                       placeholder={t('providers.placeholder_base_url')}
                       className="w-full px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all font-mono"
                     />
+                    <p className="text-[11px] leading-relaxed text-zinc-500">{t('providers.base_url_suffix_hint')}</p>
                   </div>
                 </div>
 
@@ -618,11 +636,11 @@ export default function ProvidersView() {
                       onChange={(value) => {
                         providersEdit.setFormData((prev) => {
                           const next = {...prev, driver_type: value};
-                          if (value === 'anthropic' && prev.base_url === 'https://api.openai.com') {
-                            next.base_url = 'https://api.anthropic.com';
+                          if (value === 'anthropic' && prev.base_url === 'https://api.openai.com/v1') {
+                            next.base_url = 'https://api.anthropic.com/v1';
                             next.docs_url = 'https://docs.anthropic.com/en/api/getting-started';
-                          } else if (value === 'openai_compatible' && prev.base_url === 'https://api.anthropic.com') {
-                            next.base_url = 'https://api.openai.com';
+                          } else if (value === 'openai_compatible' && prev.base_url === 'https://api.anthropic.com/v1') {
+                            next.base_url = 'https://api.openai.com/v1';
                             next.docs_url = 'https://platform.openai.com/docs';
                           }
                           return next;

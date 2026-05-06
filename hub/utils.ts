@@ -115,27 +115,46 @@ export function normalizeProviderId(provider: string) {
     .replace(/^_+|_+$/g, '');
 }
 
-function normalizeProviderBasePath(pathname: string, enforceAnthropicV1: boolean) {
-  const trimmedPath = pathname.replace(/\/+$/, '') || '/';
-  if (!enforceAnthropicV1 || /\/v1$/i.test(trimmedPath)) {
-    return trimmedPath;
-  }
-  return trimmedPath === '/' ? '/v1' : `${trimmedPath}/v1`;
-}
-
 export function normalizeProviderBaseUrl(baseUrl: string, driverType?: string | null) {
   const trimmed = String(baseUrl || '').trim();
   if (!trimmed) return '';
 
-  const enforceAnthropicV1 = String(driverType || '').trim().toLowerCase() === 'anthropic';
-
   try {
     const url = new URL(trimmed);
-    url.pathname = normalizeProviderBasePath(url.pathname, enforceAnthropicV1);
     return url.toString().replace(/\/+$/, '');
   } catch {
-    return normalizeProviderBasePath(trimmed.replace(/\/+$/, ''), enforceAnthropicV1);
+    return trimmed.replace(/\/+$/, '');
   }
+}
+
+export function hasVersionedApiBasePath(baseUrl: string) {
+  const normalized = normalizeProviderBaseUrl(baseUrl);
+  if (!normalized) return false;
+
+  try {
+    const url = new URL(normalized);
+    const path = url.pathname.replace(/\/+$/, '') || '/';
+    return /\/v\d+(?:beta\d+)?$/i.test(path);
+  } catch {
+    return /\/v\d+(?:beta\d+)?$/i.test(normalized);
+  }
+}
+
+export function validateProviderBaseUrl(baseUrl: string, driverType?: string | null) {
+  const normalized = normalizeProviderBaseUrl(baseUrl, driverType);
+  if (!normalized) {
+    return 'Base URL is required';
+  }
+
+  const normalizedDriverType = String(driverType || '').trim().toLowerCase();
+  if (
+    (normalizedDriverType === 'openai_compatible' || normalizedDriverType === 'anthropic') &&
+    !hasVersionedApiBasePath(normalized)
+  ) {
+    return 'Base URL must include an explicit version suffix such as /v1';
+  }
+
+  return null;
 }
 
 export function canonicalizeGlobalModelName(
@@ -218,40 +237,8 @@ function looksLikeHtmlPayload(contentType: string | null, rawBody: string) {
   );
 }
 
-function buildTrailingApiV1FallbackBaseUrl(normalizedBaseUrl: string) {
-  if (!/\/api$/i.test(normalizedBaseUrl)) {
-    return '';
-  }
-
-  try {
-    const url = new URL(normalizedBaseUrl);
-    const withoutApi = url.pathname.replace(/\/api$/i, '') || '/';
-    url.pathname = withoutApi === '/' ? '/v1' : `${withoutApi.replace(/\/+$/, '')}/v1`;
-    return url.toString().replace(/\/+$/, '');
-  } catch {
-    return normalizedBaseUrl.replace(/\/api$/i, '/v1');
-  }
-}
-
 function buildProviderModelCatalogUrls(normalizedBaseUrl: string) {
-  const ordered: string[] = [];
-  const add = (url: string) => {
-    if (!ordered.includes(url)) {
-      ordered.push(url);
-    }
-  };
-  if (!/\/v\d+(?:beta\d+)?$/i.test(normalizedBaseUrl)) {
-    add(`${normalizedBaseUrl}/v1/models`);
-  }
-  const trailingApiV1FallbackBaseUrl = buildTrailingApiV1FallbackBaseUrl(normalizedBaseUrl);
-  if (trailingApiV1FallbackBaseUrl) {
-    add(`${trailingApiV1FallbackBaseUrl}/models`);
-  }
-  add(`${normalizedBaseUrl}/models`);
-  if (!/\/api$/i.test(normalizedBaseUrl)) {
-    add(`${normalizedBaseUrl}/api/models`);
-  }
-  return ordered;
+  return normalizedBaseUrl ? [`${normalizedBaseUrl}/models`] : [];
 }
 
 const PROVIDER_MODEL_CATALOG_TIMEOUT_MS = 12_000;
@@ -286,6 +273,10 @@ export async function fetchProviderSupportedModelsWithLog(
   const normalizedApiKey = String(apiKey || '').trim();
   if (!normalizedBaseUrl || !normalizedApiKey) {
     return {models: [], fetch_log, error: 'Missing base URL or API key'};
+  }
+  const baseUrlError = validateProviderBaseUrl(normalizedBaseUrl, 'openai_compatible');
+  if (baseUrlError) {
+    return {models: [], fetch_log, error: baseUrlError};
   }
 
   let lastError: Error | null = null;

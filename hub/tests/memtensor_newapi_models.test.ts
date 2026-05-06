@@ -6,7 +6,7 @@
  * （中文站点入口：https://www.newapi.ai/zh/docs → 接口文档 → Model List）
  *
  * 环境变量：
- * - MEMTENSOR_BASE_URL：默认 https://api.memtensor.cn（勿带末尾 /）
+ * - MEMTENSOR_BASE_URL：默认 https://api.memtensor.cn/v1（勿带末尾 /）
  * - MEMTENSOR_API_KEY：若设置则跑完整同步路径（与 Hub「同步模型目录」一致）
  * - SKIP_MEMTENSOR_NETWORK=1：跳过所有对外网请求
  */
@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { fetchProviderSupportedModelsWithLog } from '../utils';
 
-const DEFAULT_BASE = 'https://api.memtensor.cn';
+const DEFAULT_BASE = 'https://api.memtensor.cn/v1';
 
 function memtensorBaseUrl(): string {
   return (process.env.MEMTENSOR_BASE_URL || DEFAULT_BASE).replace(/\/+$/, '');
@@ -28,7 +28,7 @@ describe('memtensor / NewAPI model list', () => {
       return;
     }
     const base = memtensorBaseUrl();
-    const url = `${base}/v1/models`;
+    const url = `${base}/models`;
     const res = await fetch(url, {
       method: 'GET',
       headers: { Accept: 'application/json' },
@@ -57,6 +57,6 @@ describe('memtensor / NewAPI model list', () => {
     assert.ok(models.length > 0, 'expected at least one model id from NewAPI OpenAI-format response');
     const parsed = fetch_log.find((e) => e.outcome === 'parsed');
     assert.ok(parsed, `expected one successful URL in fetch_log, got: ${JSON.stringify(fetch_log)}`);
-    assert.ok(parsed!.url.includes('/v1/models') || parsed!.url.endsWith('/models'), parsed!.url);
+    assert.ok(parsed!.url.endsWith('/models'), parsed!.url);
   });
 });

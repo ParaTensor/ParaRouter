@@ -1,5 +1,10 @@
 import { pool } from './db';
-import { fetchProviderSupportedModelsWithLog, sendEmail } from './utils';
+import {
+  fetchProviderSupportedModelsWithLog,
+  normalizeProviderBaseUrl,
+  sendEmail,
+  validateProviderBaseUrl,
+} from './utils';
 
 type ProviderAccountRow = {
   id: string;
@@ -57,33 +62,7 @@ const HEALTH_CHECK_TIMEOUT_MS = 25_000;
 const HEALTH_ALERT_FAILURE_THRESHOLD = 1;
 
 function normalizeBaseUrl(baseUrl: string) {
-  const trimmed = String(baseUrl || '').trim().replace(/\/+$/, '');
-  if (!trimmed) return '';
-
-  try {
-    const parsed = new URL(trimmed);
-    if (parsed.pathname === '' || parsed.pathname === '/') {
-      parsed.pathname = '/v1';
-      return parsed.toString().replace(/\/+$/, '');
-    }
-    return parsed.toString().replace(/\/+$/, '');
-  } catch {
-    return trimmed;
-  }
-}
-
-function buildTrailingApiV1FallbackBaseUrl(baseUrl: string) {
-  const trimmed = String(baseUrl || '').trim().replace(/\/+$/, '');
-  if (!trimmed || !/\/api$/i.test(trimmed)) return '';
-
-  try {
-    const parsed = new URL(trimmed);
-    const withoutApi = parsed.pathname.replace(/\/api$/i, '') || '/';
-    parsed.pathname = withoutApi === '/' ? '/v1' : `${withoutApi.replace(/\/+$/, '')}/v1`;
-    return parsed.toString().replace(/\/+$/, '');
-  } catch {
-    return trimmed.replace(/\/api$/i, '/v1');
-  }
+  return normalizeProviderBaseUrl(baseUrl);
 }
 
 export function buildOpenAiProbeUrls(baseUrl: string, path: string) {
@@ -91,21 +70,7 @@ export function buildOpenAiProbeUrls(baseUrl: string, path: string) {
   if (!normalized) return [] as string[];
 
   const suffix = path.startsWith('/') ? path : `/${path}`;
-  const urls: string[] = [];
-  const add = (url: string) => {
-    if (!urls.includes(url)) {
-      urls.push(url);
-    }
-  };
-
-  add(`${normalized}${suffix}`);
-
-  const fallbackBaseUrl = buildTrailingApiV1FallbackBaseUrl(baseUrl);
-  if (fallbackBaseUrl) {
-    add(`${fallbackBaseUrl}${suffix}`);
-  }
-
-  return urls;
+  return [`${normalized}${suffix}`];
 }
 
 export function normalizeProbeModelIds(raw: unknown) {
@@ -122,24 +87,10 @@ export function normalizeProbeModelIds(raw: unknown) {
 }
 
 export function buildAnthropicProbeUrls(baseUrl: string) {
-  const normalized = String(baseUrl || '').trim().replace(/\/+$/, '');
+  const normalized = normalizeBaseUrl(baseUrl);
   if (!normalized) return [] as string[];
 
-  const urls: string[] = [];
-  const add = (url: string) => {
-    if (!urls.includes(url)) {
-      urls.push(url);
-    }
-  };
-
-  if (/\/v\d+(?:beta\d+)?$/i.test(normalized)) {
-    add(`${normalized}/messages`);
-  } else {
-    add(`${normalized}/v1/messages`);
-    add(`${normalized}/messages`);
-  }
-
-  return urls;
+  return [`${normalized}/messages`];
 }
 
 async function loadProbeTargets(providerAccountId: string, providerKeyId: string): Promise<LoadedProbeTargets> {
@@ -221,54 +172,54 @@ async function loadProbeTargets(providerAccountId: string, providerKeyId: string
 }
 
 async function probeOpenAiCompatible(baseUrl: string, apiKey: string, model: string) {
+  const baseUrlError = validateProviderBaseUrl(baseUrl, 'openai_compatible');
+  if (baseUrlError) {
+    return { ok: false, status: 500, error: baseUrlError };
+  }
+
   const urls = buildOpenAiProbeUrls(baseUrl, '/chat/completions');
   if (urls.length === 0) {
     return { ok: false, status: 500, error: 'invalid base url' };
   }
 
-  let lastStatus = 0;
-  let lastError = 'openai-compatible probe failed';
-
-  for (const url of urls) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: 'user', content: 'Reply with exactly: ok' }],
-          max_tokens: 16,
-          stream: false,
-        }),
-        signal: controller.signal,
-      });
-      const body = await response.text();
-      if (response.ok) {
-        return {
-          ok: true,
-          status: response.status,
-          error: null,
-        };
-      }
-      lastStatus = response.status;
-      lastError = body.slice(0, 500) || `HTTP ${response.status}`;
-    } catch (error) {
-      lastStatus = 0;
-      lastError = error instanceof Error ? error.message : String(error);
-    } finally {
-      clearTimeout(timeout);
-    }
+  const [url] = urls;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: 'Reply with exactly: ok' }],
+        max_tokens: 16,
+        stream: false,
+      }),
+      signal: controller.signal,
+    });
+    const body = await response.text();
+    return {
+      ok: response.ok,
+      status: response.status,
+      error: response.ok ? null : body.slice(0, 500),
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, status: 0, error: message };
+  } finally {
+    clearTimeout(timeout);
   }
-
-  return { ok: false, status: lastStatus, error: lastError };
 }
 
 async function probeAnthropic(baseUrl: string, apiKey: string, model: string) {
+  const baseUrlError = validateProviderBaseUrl(baseUrl, 'anthropic');
+  if (baseUrlError) {
+    return { ok: false, status: 500, error: baseUrlError };
+  }
+
   const urls = buildAnthropicProbeUrls(baseUrl);
   if (urls.length === 0) {
     return { ok: false, status: 500, error: 'invalid base url' };

@@ -6,6 +6,7 @@ import {
   normalizeProviderBaseUrl,
   normalizeProviderId,
   providerBaseUrls,
+  validateProviderBaseUrl,
   type ProviderCatalogFetchLogEntry,
 } from '../utils';
 import { requireRole } from '../middleware/auth';
@@ -317,10 +318,13 @@ router.put('/provider-keys/:provider', requireRole('admin'), async (req, res) =>
     const normalizedReasoningTextModelScope = normalizedDriverType === 'openai_compatible'
       ? normalizeReasoningTextModelScope(reasoning_text_model_scope, normalizedReasoningTextEncoding)
       : 'none';
-    const normalizedBaseUrl = normalizeProviderBaseUrl(
-      String(base_url || providerBaseUrls[provider] || ''),
-      normalizedDriverType,
-    );
+    const requestedBaseUrl = String(base_url || providerBaseUrls[provider] || '');
+    const baseUrlError = validateProviderBaseUrl(requestedBaseUrl, normalizedDriverType);
+    if (baseUrlError) {
+      return res.status(400).json({ error: baseUrlError });
+    }
+
+    const normalizedBaseUrl = normalizeProviderBaseUrl(requestedBaseUrl, normalizedDriverType);
     const now = Date.now();
     const nowDate = new Date(now);
 

@@ -90,7 +90,9 @@
   "providers": {
     "default_key_label": "api key {{n}}",
     "api_channels": "API チャネル",
+    "placeholder_base_url": "https://api.example.com/v1",
     "base_url_suffix_hint": "自動で /v1 は付与されません。上流で実際に使えるベース URL を入力してください。",
+    "error_base_url_requires_version": "Base URL には /v1 のような明示的なバージョン接尾辞が必要です。",
     "unknown_error": "不明なエラー",
     "catalog_empty": "上流のモデル一覧はまだありません",
     "catalog_synced_zero": "同期済みですがモデル id を 0 件抽出",

@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { fetchProviderSupportedModelsWithLog, normalizeProviderBaseUrl } from '../utils';
+import {
+  fetchProviderSupportedModelsWithLog,
+  normalizeProviderBaseUrl,
+  validateProviderBaseUrl,
+} from '../utils';
 
 describe('normalizeProviderBaseUrl', () => {
   test('keeps openai-compatible root bases unchanged', () => {
@@ -11,28 +15,35 @@ describe('normalizeProviderBaseUrl', () => {
     );
   });
 
-  test('adds /v1 for anthropic root bases', () => {
+  test('does not auto-add /v1 for anthropic root bases', () => {
     assert.equal(
       normalizeProviderBaseUrl('https://api.b.ai', 'anthropic'),
-      'https://api.b.ai/v1',
+      'https://api.b.ai',
     );
   });
 
-  test('adds /v1 after custom anthropic base paths', () => {
+  test('trims trailing slashes from versioned paths', () => {
     assert.equal(
-      normalizeProviderBaseUrl('https://taotoken.net/api/', 'anthropic'),
+      normalizeProviderBaseUrl('https://taotoken.net/api/v1/', 'anthropic'),
       'https://taotoken.net/api/v1',
     );
   });
 
-  test('does not duplicate anthropic /v1 suffixes', () => {
+  test('rejects openai-compatible bases without an explicit version suffix', () => {
     assert.equal(
-      normalizeProviderBaseUrl('https://api.anthropic.com/v1/', 'anthropic'),
-      'https://api.anthropic.com/v1',
+      validateProviderBaseUrl('https://api.b.ai', 'openai_compatible'),
+      'Base URL must include an explicit version suffix such as /v1',
     );
   });
 
-  test('tries a root /v1/models fallback for openai-compatible bases ending with /api', async () => {
+  test('rejects anthropic bases without an explicit version suffix', () => {
+    assert.equal(
+      validateProviderBaseUrl('https://api.anthropic.com', 'anthropic'),
+      'Base URL must include an explicit version suffix such as /v1',
+    );
+  });
+
+  test('fetchProviderSupportedModelsWithLog only uses the configured /models endpoint', async () => {
     const urls: string[] = [];
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL) => {
@@ -52,13 +63,10 @@ describe('normalizeProviderBaseUrl', () => {
     }) as typeof fetch;
 
     try {
-      const result = await fetchProviderSupportedModelsWithLog('https://api.b.ai/api', 'test-key');
+      const result = await fetchProviderSupportedModelsWithLog('https://api.b.ai/v1', 'test-key');
       assert.equal(result.error, null);
       assert.deepEqual(result.models, ['bai/gpt-5.5']);
-      assert.deepEqual(urls, [
-        'https://api.b.ai/api/v1/models',
-        'https://api.b.ai/v1/models',
-      ]);
+      assert.deepEqual(urls, ['https://api.b.ai/v1/models']);
     } finally {
       globalThis.fetch = originalFetch;
     }
