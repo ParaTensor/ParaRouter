@@ -293,6 +293,8 @@ router.get('/:modelId/providers', requireRole('admin'), async (req, res) => {
   if (!modelId) return res.status(400).json({ error: 'modelId required' });
   const stateResult = await pool.query('SELECT current_version FROM pricing_state WHERE id = 1');
   const currentVersion = stateResult.rows[0]?.current_version || 'bootstrap';
+  const effectivePricingModelId = (row: { public_model_id?: string | null; model_id?: string | null }) =>
+    String(row.public_model_id || row.model_id || '').trim();
   const [draftResult, publishedResult] = await Promise.all([
     pool.query(
       `SELECT model_id, public_model_id, provider_account_id, provider_key_id, provider_model_id, price_mode, input_price, output_price, cache_read_price, cache_write_price,
@@ -312,12 +314,12 @@ router.get('/:modelId/providers', requireRole('admin'), async (req, res) => {
     ),
   ]);
   const draftKeys = new Set(
-    draftResult.rows.map((r) => `${r.model_id}::${r.provider_account_id}::${r.provider_key_id}`),
+    draftResult.rows.map((r) => `${effectivePricingModelId(r)}::${r.provider_account_id}::${r.provider_key_id}`),
   );
   const merged = [
     ...draftResult.rows.map((r) => ({ ...mapPricingRow(r), row_status: 'Draft' })),
     ...publishedResult.rows
-      .filter((r) => !draftKeys.has(`${r.model_id}::${r.provider_account_id}::${r.provider_key_id}`))
+      .filter((r) => !draftKeys.has(`${effectivePricingModelId(r)}::${r.provider_account_id}::${r.provider_key_id}`))
       .map((r) => ({ ...mapPricingRow(r), row_status: 'Published' })),
   ];
   res.json({ model_id: modelId, version: currentVersion, rows: merged });

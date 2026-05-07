@@ -17,8 +17,6 @@ CREATE TABLE IF NOT EXISTS provider_types (
   label TEXT NOT NULL,
   base_url TEXT NOT NULL,
   driver_type TEXT NOT NULL DEFAULT 'openai_compatible',
-  reasoning_text_encoding TEXT NOT NULL DEFAULT '',
-  reasoning_text_model_scope TEXT NOT NULL DEFAULT 'none',
   models JSONB NOT NULL DEFAULT '[]'::jsonb,
   enabled BOOLEAN NOT NULL DEFAULT true,
   sort_order INTEGER NOT NULL DEFAULT 0,
@@ -39,9 +37,6 @@ CREATE TABLE IF NOT EXISTS provider_accounts (
   supported_models_updated_at BIGINT,
   updated_at BIGINT NOT NULL
 );
-
-ALTER TABLE provider_types ADD COLUMN IF NOT EXISTS reasoning_text_encoding TEXT NOT NULL DEFAULT '';
-ALTER TABLE provider_types ADD COLUMN IF NOT EXISTS reasoning_text_model_scope TEXT NOT NULL DEFAULT 'none';
 
 -- Hub uses provider_api_keys
 CREATE TABLE IF NOT EXISTS provider_api_keys (

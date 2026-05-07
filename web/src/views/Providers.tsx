@@ -96,7 +96,7 @@ const providerProtocolOptions = [
   { value: 'anthropic', label: 'Anthropic' },
 ];
 
-const providerSettingsGridClass = 'lg:grid-cols-[180px_minmax(0,1fr)_minmax(0,1fr)]';
+const providerSettingsGridClass = 'lg:grid-cols-[180px]';
 
 function providerProtocolLabel(driverType?: string | null) {
   return driverType === 'anthropic' ? 'Anthropic' : 'OpenAI';
@@ -105,15 +105,6 @@ function providerProtocolLabel(driverType?: string | null) {
 export default function ProvidersView() {
   const { t } = useTranslation();
   const isAdmin = localUser.role === 'admin';
-  const reasoningTextEncodingOptions = [
-    { value: '', label: t('providers.reasoning_text_encoding_none') },
-    { value: 'xml_think_tag', label: t('providers.reasoning_text_encoding_xml_think_tag') },
-  ];
-  const reasoningTextModelScopeOptions = [
-    { value: 'none', label: t('providers.reasoning_text_model_scope_none') },
-    { value: 'claude_family', label: t('providers.reasoning_text_model_scope_claude_family') },
-    { value: 'all_models', label: t('providers.reasoning_text_model_scope_all_models') },
-  ];
   const [providers, setProviders] = React.useState<ProviderRow[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -694,8 +685,8 @@ export default function ProvidersView() {
 
             <div className="scrollbar-hover flex-1 space-y-4 overflow-auto px-5 py-5">
               <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4">
-                <div className={`grid gap-3 ${providerSettingsGridClass}`}>
-                  <div className="min-w-0 space-y-2">
+                <div className="grid gap-3 lg:grid-cols-4">
+                  <div className="min-w-0 space-y-2 lg:col-span-1">
                     <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('providers.display_name')}</label>
                     <input
                       value={formData.label}
@@ -718,21 +709,7 @@ export default function ProvidersView() {
                       className="w-full min-w-0 px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
                     />
                   </div>
-
-                  <div className="min-w-0 space-y-2 lg:col-span-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('providers.base_url')}</label>
-                    <input
-                      value={formData.base_url}
-                      onChange={(e) => providersEdit.setFormData({...formData, base_url: e.target.value})}
-                      placeholder={t('providers.placeholder_base_url')}
-                      className="w-full px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all font-mono"
-                    />
-                    <p className="text-[11px] leading-relaxed text-zinc-500">{t('providers.base_url_suffix_hint')}</p>
-                  </div>
-                </div>
-
-                <div className={`mt-3 grid gap-3 ${providerSettingsGridClass}`}>
-                  <div className="min-w-0 space-y-2">
+                  <div className="min-w-0 space-y-2 lg:col-span-1">
                     <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('provideraccountmodal.protocol')}</label>
                     <Select
                       value={formData.driver_type || 'openai_compatible'}
@@ -752,45 +729,27 @@ export default function ProvidersView() {
                       options={providerProtocolOptions}
                     />
                   </div>
-
-                  <div className="min-w-0 space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('providers.reasoning_text_encoding')}</label>
-                    <Select
-                      value={formData.reasoning_text_encoding || ''}
-                      onChange={(value) => {
-                        providersEdit.setFormData((prev) => ({
-                          ...prev,
-                          reasoning_text_encoding: value,
-                          reasoning_text_model_scope: value ? (prev.reasoning_text_model_scope || 'claude_family') : 'none',
-                        }));
-                      }}
-                      options={reasoningTextEncodingOptions}
-                      disabled={formData.driver_type !== 'openai_compatible'}
+                  <div className="min-w-0 space-y-2 lg:col-span-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('providers.base_url')}</label>
+                    <input
+                      value={formData.base_url}
+                      onChange={(e) => providersEdit.setFormData({...formData, base_url: e.target.value})}
+                      placeholder={t('providers.placeholder_base_url')}
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all font-mono"
                     />
-                  </div>
-
-                  <div className="min-w-0 space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('providers.reasoning_text_model_scope')}</label>
-                    <Select
-                      value={formData.reasoning_text_model_scope || 'none'}
-                      onChange={(value) => providersEdit.setFormData({...formData, reasoning_text_model_scope: value})}
-                      options={reasoningTextModelScopeOptions}
-                      disabled={formData.driver_type !== 'openai_compatible' || !formData.reasoning_text_encoding}
-                    />
+                    <div className="text-right">
+                      <p className="inline-block text-[11px] leading-relaxed text-zinc-500">{t('providers.base_url_suffix_hint')}</p>
+                    </div>
                   </div>
                 </div>
-
-                <p className="mt-2 text-right text-[10px] leading-relaxed text-zinc-500">
-                  {t('providers.reasoning_text_compact_hint')}
-                </p>
               </div>
 
-              <div className="space-y-3 pt-4 border-t border-zinc-100">
+              <div className="flex items-center justify-between gap-3 pt-4 border-t border-zinc-100">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 space-y-1">
                     <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('providers.api_channels')}</label>
-                    <p className="text-[11px] leading-relaxed text-zinc-500">{t('providers.catalog_sync_hint_modal')}</p>
                   </div>
+                </div>
                   <button
                     type="button"
                     onClick={() => {
@@ -801,8 +760,9 @@ export default function ProvidersView() {
                       providersEdit.setFormData({...formData, keys: newKeys});
                       setSelectedKeyIndex(newKeys.length - 1);
                     }}
-                    className="text-xs font-bold text-zinc-900 bg-zinc-100 px-2 py-1 rounded hover:bg-zinc-200 transition-colors"
+                    className="inline-flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-bold text-white transition-all hover:bg-zinc-800 active:scale-95"
                   >
+                    <Plus size={14} strokeWidth={3} />
                     {t('providers.add_key')}
                   </button>
                 </div>
@@ -851,61 +811,60 @@ export default function ProvidersView() {
 
                   {formData.keys[selectedKeyIndex] ? (
                     <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-                      <div
-                        className={clsx(
-                          'mb-4 flex flex-wrap items-center gap-2',
-                          formData.keys[selectedKeyIndex].id ? 'justify-end' : 'justify-between',
-                        )}
-                      >
-                          {!formData.keys[selectedKeyIndex].id ? (
-                            <p className="flex-1 min-w-0 text-[11px] leading-snug text-zinc-500 sm:whitespace-nowrap">
-                              {t('providers.sync_requires_save_hint')}
-                            </p>
-                          ) : null}
-                          <div className="flex flex-wrap items-center justify-end gap-2">
-                          {formData.keys[selectedKeyIndex].id && (
-                            <button
-                              type="button"
-                              onClick={() => handleTestProviderConnection(formData.provider, formData.keys[selectedKeyIndex].id as string)}
-                              disabled={busyAction?.target === `${formData.provider}::${formData.keys[selectedKeyIndex].id}`}
-                              className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[10px] font-semibold text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-50"
-                            >
-                              <RefreshCw size={11} className={busyAction?.target === `${formData.provider}::${formData.keys[selectedKeyIndex].id}` && busyAction.kind === 'connection' ? 'animate-spin' : ''} />
-                              {t('providers.test_connection')}
-                            </button>
-                          )}
-                          {formData.keys[selectedKeyIndex].id && (
-                            <button
-                              type="button"
-                              onClick={() => handleRefreshModelCatalog(formData.provider, formData.keys[selectedKeyIndex].id as string)}
-                              disabled={busyAction?.target === `${formData.provider}::${formData.keys[selectedKeyIndex].id}`}
-                              className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[10px] font-semibold text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-50"
-                            >
-                              <RefreshCw size={11} className={busyAction?.target === `${formData.provider}::${formData.keys[selectedKeyIndex].id}` && busyAction.kind === 'catalog' ? 'animate-spin' : ''} />
-                              {t('providers.refresh_catalog')}
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (formData.keys.length <= 1) return;
-                              const newKeys = [...formData.keys];
-                              newKeys.splice(selectedKeyIndex, 1);
-                              const nextIndex = Math.min(selectedKeyIndex, Math.max(newKeys.length - 1, 0));
-                              providersEdit.setFormData({...formData, keys: newKeys});
-                              setSelectedKeyIndex(nextIndex);
-                            }}
-                            disabled={formData.keys.length <= 1}
-                            className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-white px-2 py-1 text-[10px] font-semibold text-red-600 hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            <Trash2 size={11} />
-                            {t('providers.delete')}
-                          </button>
-                          </div>
-                        </div>
-
                       <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
                         <div className="min-h-0 min-w-0 space-y-3 self-start">
+                          <div
+                            className={clsx(
+                              'flex flex-wrap items-center gap-2',
+                              formData.keys[selectedKeyIndex].id ? 'justify-start' : 'justify-between',
+                            )}
+                          >
+                            {!formData.keys[selectedKeyIndex].id ? (
+                              <p className="flex-1 min-w-0 text-[11px] leading-snug text-zinc-500 sm:whitespace-nowrap">
+                                {t('providers.sync_requires_save_hint')}
+                              </p>
+                            ) : null}
+                            <div className="flex flex-wrap items-center justify-start gap-2">
+                              {formData.keys[selectedKeyIndex].id && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleTestProviderConnection(formData.provider, formData.keys[selectedKeyIndex].id as string)}
+                                  disabled={busyAction?.target === `${formData.provider}::${formData.keys[selectedKeyIndex].id}`}
+                                  className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[10px] font-semibold text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-50"
+                                >
+                                  <RefreshCw size={11} className={busyAction?.target === `${formData.provider}::${formData.keys[selectedKeyIndex].id}` && busyAction.kind === 'connection' ? 'animate-spin' : ''} />
+                                  {t('providers.test_connection')}
+                                </button>
+                              )}
+                              {formData.keys[selectedKeyIndex].id && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRefreshModelCatalog(formData.provider, formData.keys[selectedKeyIndex].id as string)}
+                                  disabled={busyAction?.target === `${formData.provider}::${formData.keys[selectedKeyIndex].id}`}
+                                  className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[10px] font-semibold text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-50"
+                                >
+                                  <RefreshCw size={11} className={busyAction?.target === `${formData.provider}::${formData.keys[selectedKeyIndex].id}` && busyAction.kind === 'catalog' ? 'animate-spin' : ''} />
+                                  {t('providers.refresh_catalog')}
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (formData.keys.length <= 1) return;
+                                  const newKeys = [...formData.keys];
+                                  newKeys.splice(selectedKeyIndex, 1);
+                                  const nextIndex = Math.min(selectedKeyIndex, Math.max(newKeys.length - 1, 0));
+                                  providersEdit.setFormData({...formData, keys: newKeys});
+                                  setSelectedKeyIndex(nextIndex);
+                                }}
+                                disabled={formData.keys.length <= 1}
+                                className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-white px-2 py-1 text-[10px] font-semibold text-red-600 hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                <Trash2 size={11} />
+                                {t('providers.delete')}
+                              </button>
+                            </div>
+                          </div>
                           <div className="space-y-2">
                             <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
                               {t('providers.display_name')}
@@ -981,9 +940,6 @@ export default function ProvidersView() {
                           <label className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
                             {t('providers.catalog_models_editor')}
                           </label>
-                          <p className="text-[11px] leading-relaxed text-zinc-500">
-                            {t('providers.catalog_manual_hint')}
-                          </p>
                           <textarea
                             value={catalogEditorValue}
                             onChange={(e) => setCatalogEditorValue(e.target.value)}
@@ -1009,8 +965,8 @@ export default function ProvidersView() {
                   ) : null}
                 </div>
               </div>
-</div>
-            <div className="border-t px-6 py-4 bg-zinc-50/80 flex flex-col sm:flex-row sm:items-center justify-end shrink-0 gap-3">
+
+              <div className="border-t px-6 py-4 bg-zinc-50/80 flex flex-col sm:flex-row sm:items-center justify-end shrink-0 gap-3">
               {isEditing ? (
                 <div className="sm:mr-auto text-[11px] text-zinc-500">
                   {autoSaveState === 'saving' && t('providers.saving')}

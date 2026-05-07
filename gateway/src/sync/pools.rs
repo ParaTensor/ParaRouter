@@ -6,11 +6,7 @@ use unigateway_sdk::core::{
     Endpoint, LoadBalancingStrategy, ModelPolicy, ProviderKind, ProviderPool, RetryPolicy,
     SecretString, UniGatewayEngine,
 };
-use unigateway_sdk::protocol::REASONING_TEXT_ENCODING_KEY;
 use url::Url;
-
-const REASONING_TEXT_MODEL_SCOPE_KEY: &str = "pararouter.reasoning_text_model_scope";
-const REASONING_TEXT_MODEL_SCOPE_NONE: &str = "none";
 
 fn normalize_base_url(base_url: &str, provider_kind: &ProviderKind) -> String {
     if !matches!(provider_kind, ProviderKind::OpenAiCompatible) {
@@ -29,33 +25,6 @@ fn normalize_base_url(base_url: &str, provider_kind: &ProviderKind) -> String {
     base_url.to_string()
 }
 
-fn endpoint_reasoning_policy_metadata(
-    provider_kind: &ProviderKind,
-    reasoning_text_encoding: &str,
-    reasoning_text_model_scope: &str,
-) -> HashMap<String, String> {
-    if !matches!(provider_kind, ProviderKind::OpenAiCompatible) {
-        return HashMap::new();
-    }
-
-    let encoding = reasoning_text_encoding.trim();
-    let scope = reasoning_text_model_scope.trim();
-    if encoding.is_empty() || scope.is_empty() || scope == REASONING_TEXT_MODEL_SCOPE_NONE {
-        return HashMap::new();
-    }
-
-    HashMap::from([
-        (
-            REASONING_TEXT_ENCODING_KEY.to_string(),
-            encoding.to_string(),
-        ),
-        (
-            REASONING_TEXT_MODEL_SCOPE_KEY.to_string(),
-            scope.to_string(),
-        ),
-    ])
-}
-
 pub async fn load_all_pools(db: &Pool<Postgres>, engine: &UniGatewayEngine) -> anyhow::Result<()> {
     #[derive(sqlx::FromRow)]
     struct AccountRow {
@@ -63,8 +32,6 @@ pub async fn load_all_pools(db: &Pool<Postgres>, engine: &UniGatewayEngine) -> a
         provider_type: String,
         driver_type: String,
         base_url: String,
-        reasoning_text_encoding: String,
-        reasoning_text_model_scope: String,
     }
 
     let accounts = sqlx::query_as::<_, AccountRow>(
@@ -72,11 +39,9 @@ pub async fn load_all_pools(db: &Pool<Postgres>, engine: &UniGatewayEngine) -> a
         SELECT a.id,
                a.provider_type,
                COALESCE(NULLIF(pt.driver_type, ''), CASE WHEN a.provider_type = 'anthropic' THEN 'anthropic' ELSE 'openai_compatible' END) AS driver_type,
-             a.base_url,
-             COALESCE(pt.reasoning_text_encoding, '') AS reasoning_text_encoding,
-             COALESCE(pt.reasoning_text_model_scope, 'none') AS reasoning_text_model_scope
+             a.base_url
         FROM provider_accounts a
-        LEFT JOIN provider_types pt ON pt.id = a.id
+        LEFT JOIN provider_types pt ON pt.id = a.provider_type
         WHERE a.status = 'active'
         "#,
     )
@@ -208,11 +173,7 @@ pub async fn load_all_pools(db: &Pool<Postgres>, engine: &UniGatewayEngine) -> a
                         .unwrap_or_default(),
                 },
                 enabled: true,
-                metadata: endpoint_reasoning_policy_metadata(
-                    &provider_kind,
-                    &account.reasoning_text_encoding,
-                    &account.reasoning_text_model_scope,
-                ),
+                metadata: HashMap::new(),
             };
 
             pool_endpoints

@@ -367,12 +367,16 @@ router.post('/publish', async (req, res) => {
        WHERE version = $2
          AND NOT EXISTS (
            SELECT 1 FROM model_provider_pricings_draft d
-           WHERE COALESCE(d.public_model_id, d.model_id) = COALESCE(model_provider_pricings.public_model_id, model_provider_pricings.model_id)
-              OR (
-                d.model_id = model_provider_pricings.model_id
-                AND d.provider_account_id = model_provider_pricings.provider_account_id
-                AND d.provider_key_id = model_provider_pricings.provider_key_id
-              )
+           WHERE (
+             COALESCE(d.public_model_id, d.model_id) = COALESCE(model_provider_pricings.public_model_id, model_provider_pricings.model_id)
+             AND d.provider_account_id = model_provider_pricings.provider_account_id
+             AND d.provider_key_id = model_provider_pricings.provider_key_id
+           )
+           OR (
+             d.model_id = model_provider_pricings.model_id
+             AND d.provider_account_id = model_provider_pricings.provider_account_id
+             AND d.provider_key_id = model_provider_pricings.provider_key_id
+           )
          )`,
       [version, currentVersion],
     );

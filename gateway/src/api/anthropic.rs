@@ -7,13 +7,15 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
+use futures_util::StreamExt;
 use serde_json::Value;
 use url::Url;
 use uuid::Uuid;
 
 use super::enforce_model_acl;
 use unigateway_sdk::core::{
-    Endpoint, ExecutionTarget, MessageRole, ProviderKind, ProxyChatRequest,
+    ChatResponseChunk, ChatResponseFinal, Endpoint, EndpointRef, ExecutionPlan, ExecutionTarget,
+    MessageRole, ProviderKind, ProxyChatRequest, ProxySession, StreamingResponse,
 };
 use unigateway_sdk::host::status::status_for_host_error;
 use unigateway_sdk::host::{
@@ -21,7 +23,7 @@ use unigateway_sdk::host::{
     HostProtocol, HostRequest,
 };
 use unigateway_sdk::protocol::{
-    ProtocolHttpResponse, ProtocolResponseBody, REASONING_TEXT_ENCODING_KEY,
+    render_anthropic_chat_session, ProtocolHttpResponse, ProtocolResponseBody,
 };
 
 use crate::auth::keys::AuthenticatedUser;
@@ -142,96 +144,104 @@ fn downgrade_incompatible_tool_choice(
     true
 }
 
-const REASONING_TEXT_MODEL_SCOPE_KEY: &str = "pararouter.reasoning_text_model_scope";
-const REASONING_TEXT_MODEL_SCOPE_CLAUDE_FAMILY: &str = "claude_family";
-const REASONING_TEXT_MODEL_SCOPE_ALL_MODELS: &str = "all_models";
-
-fn model_matches_reasoning_text_scope(global_model_id: &str, scope: &str) -> bool {
-    let normalized = global_model_id.trim().to_ascii_lowercase();
-    match scope.trim() {
-        REASONING_TEXT_MODEL_SCOPE_ALL_MODELS => true,
-        REASONING_TEXT_MODEL_SCOPE_CLAUDE_FAMILY => normalized.starts_with("claude-"),
-        _ => false,
-    }
+fn unigateway_probe_enabled() -> bool {
+    std::env::var("PARAROUTER_UNIGATEWAY_PROBE")
+        .map(|value| matches!(value.trim(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
 }
 
-fn selected_reasoning_policy<'a>(
-    endpoints: &'a [Endpoint],
+fn endpoint_matches_hint(endpoint: &Endpoint, hint: &str) -> bool {
+    endpoint.endpoint_id.eq_ignore_ascii_case(hint)
+        || endpoint
+            .provider_name
+            .as_deref()
+            .is_some_and(|value| value.eq_ignore_ascii_case(hint))
+        || endpoint
+            .source_endpoint_id
+            .as_deref()
+            .is_some_and(|value| value.eq_ignore_ascii_case(hint))
+        || endpoint
+            .provider_family
+            .as_deref()
+            .is_some_and(|value| value.eq_ignore_ascii_case(hint))
+}
+
+fn execution_target_with_endpoint_hint(
+    pool_id: &str,
+    endpoints: &[Endpoint],
     endpoint_hint: Option<&str>,
-) -> Option<(&'a str, &'a str)> {
-    let selected = endpoints
+) -> ExecutionTarget {
+    let Some(hint) = endpoint_hint.map(str::trim).filter(|hint| !hint.is_empty()) else {
+        return ExecutionTarget::Pool {
+            pool_id: pool_id.to_string(),
+        };
+    };
+
+    let candidates = endpoints
         .iter()
-        .filter(|endpoint| {
-            endpoint_hint.is_none_or(|hint| {
-                endpoint.endpoint_id == hint || endpoint.source_endpoint_id.as_deref() == Some(hint)
-            })
+        .filter(|endpoint| endpoint_matches_hint(endpoint, hint))
+        .map(|endpoint| EndpointRef {
+            endpoint_id: endpoint.endpoint_id.clone(),
         })
         .collect::<Vec<_>>();
 
-    if selected.is_empty()
-        || !selected
-            .iter()
-            .all(|endpoint| matches!(endpoint.provider_kind, ProviderKind::OpenAiCompatible))
-    {
-        return None;
+    if candidates.is_empty() {
+        return ExecutionTarget::Pool {
+            pool_id: pool_id.to_string(),
+        };
     }
 
-    let first = selected[0];
-    let encoding = first
-        .metadata
-        .get(REASONING_TEXT_ENCODING_KEY)
-        .map(String::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())?;
-    let scope = first
-        .metadata
-        .get(REASONING_TEXT_MODEL_SCOPE_KEY)
-        .map(String::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())?;
-
-    if !selected.iter().all(|endpoint| {
-        endpoint
-            .metadata
-            .get(REASONING_TEXT_ENCODING_KEY)
-            .map(String::as_str)
-            .map(str::trim)
-            == Some(encoding)
-            && endpoint
-                .metadata
-                .get(REASONING_TEXT_MODEL_SCOPE_KEY)
-                .map(String::as_str)
-                .map(str::trim)
-                == Some(scope)
-    }) {
-        return None;
-    }
-
-    Some((encoding, scope))
+    ExecutionTarget::Plan(ExecutionPlan {
+        pool_id: Some(pool_id.to_string()),
+        candidates,
+        load_balancing_override: None,
+        retry_policy_override: None,
+        metadata: std::collections::HashMap::new(),
+    })
 }
 
-fn maybe_apply_declared_reasoning_text_encoding(
-    request: &mut ProxyChatRequest,
-    global_model_id: &str,
-    endpoints: &[Endpoint],
-    endpoint_hint: Option<&str>,
-) -> bool {
-    if request.metadata.contains_key(REASONING_TEXT_ENCODING_KEY) {
-        return false;
-    }
+fn probe_anthropic_render_input(
+    session: ProxySession<ChatResponseChunk, ChatResponseFinal>,
+) -> ProxySession<ChatResponseChunk, ChatResponseFinal> {
+    match session {
+        ProxySession::Completed(completed) => {
+            tracing::debug!(
+                target: "pararouter.unigateway.probe",
+                raw = %completed.response.raw,
+                provider = ?completed.report.selected_provider,
+                model = ?completed.response.model,
+                metadata = ?completed.report.metadata,
+                "before anthropic downstream render"
+            );
+            ProxySession::Completed(completed)
+        }
+        ProxySession::Streaming(streaming) => {
+            let StreamingResponse {
+                stream,
+                completion,
+                request_id,
+                request_metadata,
+            } = streaming;
+            let stream = Box::pin(stream.map(|item| {
+                if let Ok(chunk) = &item {
+                    tracing::debug!(
+                        target: "pararouter.unigateway.probe",
+                        raw = %chunk.raw,
+                        delta = ?chunk.delta,
+                        "before anthropic downstream stream render chunk"
+                    );
+                }
+                item
+            }));
 
-    let Some((encoding, scope)) = selected_reasoning_policy(endpoints, endpoint_hint) else {
-        return false;
-    };
-    if !model_matches_reasoning_text_scope(global_model_id, scope) {
-        return false;
+            ProxySession::Streaming(StreamingResponse {
+                stream,
+                completion,
+                request_id,
+                request_metadata,
+            })
+        }
     }
-
-    request.metadata.insert(
-        REASONING_TEXT_ENCODING_KEY.to_string(),
-        encoding.to_string(),
-    );
-    true
 }
 
 pub(crate) fn normalize_system_prompt_for_openai_upstream(request: &mut ProxyChatRequest) {
@@ -361,21 +371,6 @@ pub async fn messages(
         })
         .unwrap_or((false, Vec::new(), Vec::new()));
     if targets_openai_upstream {
-        if maybe_apply_declared_reasoning_text_encoding(
-            &mut request,
-            &resolved.global_model_id,
-            &pool_endpoints,
-            resolved.endpoint_hint.as_deref(),
-        ) {
-            request.metadata.insert(
-                "compat_reasoning_text_encoding".to_string(),
-                request
-                    .metadata
-                    .get(REASONING_TEXT_ENCODING_KEY)
-                    .cloned()
-                    .unwrap_or_default(),
-            );
-        }
         normalize_system_prompt_for_openai_upstream(&mut request);
         let request_tools = request.tools.clone();
         if downgrade_incompatible_tool_choice(
@@ -391,6 +386,31 @@ pub async fn messages(
     }
 
     // Stage 3: Execution via HostContext and dispatch_request
+    if targets_openai_upstream && unigateway_probe_enabled() {
+        let target = execution_target_with_endpoint_hint(
+            &service_id,
+            &pool_endpoints,
+            resolved.endpoint_hint.as_deref(),
+        );
+        match runtime.engine.proxy_chat(request, target).await {
+            Ok(session) => {
+                return into_axum_response(
+                    render_anthropic_chat_session(probe_anthropic_render_input(session)),
+                    Some((runtime.stream_observation_sink.clone(), stream_labels)),
+                );
+            }
+            Err(err) => {
+                mark_provider_key_unhealthy(
+                    &runtime.db,
+                    resolved.endpoint_hint.as_deref(),
+                    &err.to_string(),
+                )
+                .await;
+                return error_response_for_host_error(&HostError::core(err));
+            }
+        }
+    }
+
     let ctx = HostContext::from_parts(&runtime.engine, &*runtime);
     match dispatch_request(
         &ctx,
@@ -432,67 +452,11 @@ mod tests {
     use super::{
         base_url_requires_named_tool_choice_downgrade, downgrade_incompatible_tool_choice,
         endpoint_urls_require_named_tool_choice_downgrade,
-        maybe_apply_declared_reasoning_text_encoding, normalize_system_prompt_for_openai_upstream,
-        REASONING_TEXT_MODEL_SCOPE_CLAUDE_FAMILY, REASONING_TEXT_MODEL_SCOPE_KEY,
+        normalize_system_prompt_for_openai_upstream,
     };
     use serde_json::json;
     use std::collections::HashMap;
-    use unigateway_sdk::core::{
-        ContentBlock, Endpoint, Message, MessageRole, ModelPolicy, ProviderKind,
-        ProxyChatRequest, SecretString,
-    };
-    use unigateway_sdk::protocol::REASONING_TEXT_ENCODING_KEY;
-
-    fn test_endpoint(
-        provider_name: &str,
-        provider_kind: ProviderKind,
-        reasoning_text_encoding: Option<&str>,
-        reasoning_text_model_scope: Option<&str>,
-    ) -> Endpoint {
-        let mut metadata = HashMap::new();
-        if let Some(value) = reasoning_text_encoding {
-            metadata.insert(REASONING_TEXT_ENCODING_KEY.to_string(), value.to_string());
-        }
-        if let Some(value) = reasoning_text_model_scope {
-            metadata.insert(
-                REASONING_TEXT_MODEL_SCOPE_KEY.to_string(),
-                value.to_string(),
-            );
-        }
-
-        Endpoint {
-            endpoint_id: format!("{provider_name}-endpoint"),
-            provider_name: Some(provider_name.to_string()),
-            source_endpoint_id: Some(format!("{provider_name}-source")),
-            provider_family: Some(provider_name.to_string()),
-            provider_kind,
-            driver_id: "openai-compatible".to_string(),
-            base_url: "https://example.invalid/v1".to_string(),
-            api_key: SecretString::new("test-key"),
-            model_policy: ModelPolicy::default(),
-            enabled: true,
-            metadata,
-        }
-    }
-
-    fn test_proxy_chat_request() -> ProxyChatRequest {
-        ProxyChatRequest {
-            model: "claude-opus-4-7".to_string(),
-            messages: Vec::new(),
-            temperature: None,
-            top_p: None,
-            top_k: None,
-            max_tokens: None,
-            stop_sequences: None,
-            stream: false,
-            system: None,
-            tools: None,
-            tool_choice: None,
-            raw_messages: None,
-            extra: HashMap::new(),
-            metadata: HashMap::new(),
-        }
-    }
+    use unigateway_sdk::core::{ContentBlock, Message, MessageRole, ProxyChatRequest};
 
     #[test]
     fn normalizes_block_system_prompt_for_openai_upstream() {
@@ -564,50 +528,5 @@ mod tests {
             "https://www.kaopuapi.com/v1".to_string(),
             "https://taotoken.net/api/v1".to_string()
         ]));
-    }
-
-    #[test]
-    fn configured_claude_family_policy_adds_reasoning_text_encoding_metadata() {
-        let mut request = test_proxy_chat_request();
-        let endpoints = vec![test_endpoint(
-            "provider",
-            ProviderKind::OpenAiCompatible,
-            Some("xml_think_tag"),
-            Some(REASONING_TEXT_MODEL_SCOPE_CLAUDE_FAMILY),
-        )];
-
-        let applied = maybe_apply_declared_reasoning_text_encoding(
-            &mut request,
-            "claude-opus-4-7",
-            &endpoints,
-            Some("provider-endpoint"),
-        );
-
-        assert!(applied);
-        assert_eq!(
-            request.metadata.get(REASONING_TEXT_ENCODING_KEY),
-            Some(&"xml_think_tag".to_string())
-        );
-    }
-
-    #[test]
-    fn claude_family_scope_does_not_apply_to_non_claude_models() {
-        let mut request = test_proxy_chat_request();
-        let endpoints = vec![test_endpoint(
-            "provider",
-            ProviderKind::OpenAiCompatible,
-            Some("xml_think_tag"),
-            Some(REASONING_TEXT_MODEL_SCOPE_CLAUDE_FAMILY),
-        )];
-
-        let applied = maybe_apply_declared_reasoning_text_encoding(
-            &mut request,
-            "gpt-4o-mini",
-            &endpoints,
-            Some("provider-endpoint"),
-        );
-
-        assert!(!applied);
-        assert!(!request.metadata.contains_key(REASONING_TEXT_ENCODING_KEY));
     }
 }

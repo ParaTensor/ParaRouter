@@ -27,7 +27,7 @@ tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "trace", "fs"] }
 
 # LLM connector
-unigateway-sdk = { version = "2.0.3", features = ["embed"] }
+unigateway-sdk = { version = "2.0.5", features = ["embed"] }
 latch-core = "0.2.1"
 latch-score = "0.1.1"
 

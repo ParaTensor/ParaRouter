@@ -15,6 +15,14 @@ import { useTranslation } from "react-i18next";
 const rowKey = (row: {model: string; provider_account_id?: string | null; provider_key_id?: string}) => 
     `${row.model}::${row.provider_account_id || ''}::${row.provider_key_id || ''}`;
 
+const effectiveRowKey = (row: {
+  model: string;
+  global_model_id?: string | null;
+  provider_account_id?: string | null;
+  provider_key_id?: string;
+}) =>
+  `${(row.global_model_id || row.model || '').trim()}::${row.provider_account_id || ''}::${row.provider_key_id || ''}`;
+
 const getFinalPrice = (row: Pick<PricingRow, 'price_mode' | 'input_price' | 'output_price' | 'markup_rate'>) => {
   if (row.price_mode === 'fixed') {
     return typeof row.output_price === 'number' ? row.output_price : row.input_price ?? null;
@@ -247,6 +255,7 @@ export default function PricingView() {
     try {
       await apiPost('/api/pricing/publish', {operator: 'admin@pararouter.com'});
       await loadAll(false);
+      setCurrentPage(1);
       await handlePreview();
       showNotification(t('pricing.publish_success', '发布成功'));
       return true;
@@ -263,10 +272,12 @@ export default function PricingView() {
   }, []);
 
   const tableRows = React.useMemo(() => {
-    const draftMap = new Set(draft.map((r) => rowKey(r)));
+    const draftMap = new Set(draft.map((r) => effectiveRowKey(r)));
     const merged: PricingTableRow[] = [
       ...draft.map((r) => ({...r, operational_status: r.status, status: 'Draft' as const})),
-      ...published.filter((r) => !draftMap.has(rowKey(r))).map((r) => ({...r, operational_status: r.status, status: 'Published' as const})),
+      ...published
+        .filter((r) => !draftMap.has(effectiveRowKey(r)))
+        .map((r) => ({...r, operational_status: r.status, status: 'Published' as const})),
     ];
 
     const lowerSearch = search.trim().toLowerCase();

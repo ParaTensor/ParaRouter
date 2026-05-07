@@ -500,7 +500,7 @@ export async function runProviderHealthChecks(providerAccountId?: string) {
        a.label AS account_label
      FROM provider_api_keys k
      JOIN provider_accounts a ON a.id = k.provider_account_id
-     LEFT JOIN provider_types pt ON pt.id = a.id
+     LEFT JOIN provider_types pt ON pt.id = a.provider_type
      WHERE k.status = 'active'
        ${providerFilter}
      ORDER BY k.provider_account_id ASC, k.label ASC, k.id ASC`,

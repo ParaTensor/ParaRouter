@@ -2,6 +2,14 @@
 
 ## 项目规范
 
+### ParaRouter 与 UniGateway 边界
+
+- **ParaRouter 负责产品层配置、数据库同步、路由选择、鉴权、计费、健康检查和 UI/Hub 管理逻辑**。
+- **UniGateway 负责协议层语义转换、上游请求渲染、下游响应归一化、流式协议处理和 provider driver 行为**。
+- 当修复涉及 OpenAI/Anthropic 协议字段转换、provider-specific 请求体/请求头渲染、reasoning/thinking 字段解析或 SSE chunk 重写时，优先在 UniGateway 中实现；ParaRouter 只应通过 metadata 或配置声明能力，不应硬编码协议转换细节。
+- ParaRouter 可以存储并注入中立 metadata（例如 `unigateway.*`），但不应在 API handler 中把这些 metadata 翻译成特定上游 provider 的 body 参数，除非已有明确的 UniGateway 约定或临时兼容方案经过评审并标注迁移计划。
+- 修复前应先判断问题属于产品配置/路由数据，还是协议适配/driver 渲染；边界不清时先说明归属判断，不要把 UniGateway 责任下沉到 ParaRouter。
+
 ### 文件组织
 
 - **严禁在根目录放置临时或测试脚本**。

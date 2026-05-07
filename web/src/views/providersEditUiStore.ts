@@ -24,8 +24,6 @@ export type ProviderRow = {
   label?: string;
   provider_type?: string;
   driver_type?: string;
-  reasoning_text_encoding?: string;
-  reasoning_text_model_scope?: string;
   base_url?: string;
   docs_url?: string;
   supported_models?: string[];
@@ -37,8 +35,6 @@ export const DEFAULT_PROVIDER: ProviderRow = {
   provider: '',
   label: '',
   driver_type: 'openai_compatible',
-  reasoning_text_encoding: '',
-  reasoning_text_model_scope: 'none',
   base_url: '',
   docs_url: '',
   status: 'active',
@@ -109,8 +105,6 @@ export const providersEdit = {
         provider: 'openai',
         label: 'OpenAI',
         driver_type: 'openai_compatible',
-        reasoning_text_encoding: '',
-        reasoning_text_model_scope: 'none',
         base_url: 'https://api.openai.com/v1',
         docs_url: 'https://platform.openai.com/docs',
         keys: [{ label: 'Default', key: '', status: 'active', supported_models: [] }],
@@ -126,8 +120,6 @@ export const providersEdit = {
         ...provider,
         label: provider.label || '',
         driver_type: provider.driver_type || (provider.provider_type === 'anthropic' ? 'anthropic' : 'openai_compatible'),
-        reasoning_text_encoding: provider.reasoning_text_encoding || '',
-        reasoning_text_model_scope: provider.reasoning_text_model_scope || 'none',
         base_url: provider.base_url || '',
         docs_url: provider.docs_url || '',
         keys: provider.keys
