@@ -43,6 +43,8 @@ type BusyActionState = {
   kind: 'catalog' | 'connection';
 };
 
+type AutoSaveState = 'idle' | 'saving' | 'saved' | 'error';
+
 function normalizeProviderTimestamp(value: number | string | null | undefined) {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
@@ -115,11 +117,16 @@ export default function ProvidersView() {
   const [providers, setProviders] = React.useState<ProviderRow[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
+  const [autoSaveState, setAutoSaveState] = React.useState<AutoSaveState>('idle');
   const { showModal, isEditing, formData, error } = useProvidersEditUi();
   const [selectedKeyIndex, setSelectedKeyIndex] = React.useState(0);
   const [busyAction, setBusyAction] = React.useState<BusyActionState | null>(null);
   const [actionFeedback, setActionFeedback] = React.useState<ActionFeedbackState | null>(null);
   const [catalogEditorValue, setCatalogEditorValue] = React.useState('');
+  const autoSaveTimerRef = React.useRef<number | null>(null);
+  const autoSavePromiseRef = React.useRef<Promise<void> | null>(null);
+  const autoSaveTokenRef = React.useRef<symbol | null>(null);
+  const lastAutoSavedPayloadRef = React.useRef<string | null>(null);
   const loadProviders = React.useCallback(async (): Promise<ProviderRow[] | null> => {
     if (!isAdmin) {
       setLoading(false);
@@ -160,6 +167,12 @@ export default function ProvidersView() {
     if (showModal) return;
     setActionFeedback(null);
     setBusyAction(null);
+    setAutoSaveState('idle');
+    lastAutoSavedPayloadRef.current = null;
+    if (autoSaveTimerRef.current !== null) {
+      window.clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
   }, [showModal]);
 
   const actionToastLoading =
@@ -193,6 +206,140 @@ export default function ProvidersView() {
     [formData, selectedKeyIndex],
   );
 
+  const buildProviderPayload = React.useCallback(
+    (baseFormData: ProviderRow = formData) => {
+      const providerId = baseFormData.provider.trim().toLowerCase();
+      const normalizedFormData = applyCatalogEditorToFormData(catalogEditorValue, baseFormData);
+      return {
+        providerId,
+        payload: {
+          ...normalizedFormData,
+          provider: providerId,
+        },
+      };
+    },
+    [applyCatalogEditorToFormData, catalogEditorValue, formData],
+  );
+
+  const saveProviderNow = React.useCallback(
+    async (mode: 'manual' | 'auto' = 'manual') => {
+      const {providerId, payload} = buildProviderPayload();
+      if (!providerId) return;
+      if (!hasVersionedApiBasePath(payload.base_url || '')) {
+        if (mode === 'manual') {
+          providersEdit.setError(t('providers.error_base_url_requires_version'));
+        }
+        return;
+      }
+
+      if (mode === 'manual') {
+        setSaving(true);
+        providersEdit.setError(null);
+      } else {
+        setAutoSaveState('saving');
+      }
+
+      const saveToken = Symbol('provider-save');
+      autoSaveTokenRef.current = saveToken;
+      const savePromise = (async () => {
+        try {
+          providersEdit.setFormData(payload);
+          await apiPut(`/api/provider-keys/${encodeURIComponent(providerId)}`, payload);
+          lastAutoSavedPayloadRef.current = JSON.stringify(payload);
+
+          if (mode === 'manual') {
+            // Artificial delay to make the "Saving..." state perceivable and satisfying
+            await new Promise((resolve) => setTimeout(resolve, 800));
+            setActionFeedback({
+              target: 'save',
+              kind: 'connection',
+              ok: true,
+              msg: t('providers.save_success'),
+            });
+            const rows = await loadProviders();
+            const fresh = rows?.find((p) => p.provider === providerId);
+            const resumeLabel = formData.keys[selectedKeyIndex]?.label;
+            const resumeIndex = selectedKeyIndex;
+            if (fresh) {
+              providersEdit.openEdit(fresh);
+              const idx = fresh.keys.findIndex((k) => (k.label || '') === (resumeLabel || ''));
+              setSelectedKeyIndex(
+                idx >= 0 ? idx : Math.min(resumeIndex, Math.max(fresh.keys.length - 1, 0)),
+              );
+            }
+            window.setTimeout(() => {
+              setActionFeedback((cur) => (cur?.target === 'save' ? null : cur));
+            }, 3000);
+          } else {
+            setAutoSaveState('saved');
+          }
+        } catch (err: any) {
+          console.error('Failed to save provider:', err);
+          if (mode === 'manual') {
+            providersEdit.setError(err.message || t('providers.unknown_error'));
+          } else {
+            setAutoSaveState('error');
+          }
+        } finally {
+          if (mode === 'manual') {
+            setSaving(false);
+          }
+          if (autoSaveTokenRef.current === saveToken) {
+            autoSaveTokenRef.current = null;
+            autoSavePromiseRef.current = null;
+          }
+        }
+      })();
+
+      autoSavePromiseRef.current = savePromise;
+      await savePromise;
+    },
+    [buildProviderPayload, formData.keys, loadProviders, selectedKeyIndex, t],
+  );
+
+  const flushPendingAutoSave = React.useCallback(async () => {
+    if (autoSaveTimerRef.current !== null) {
+      window.clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+      await saveProviderNow('auto');
+      return;
+    }
+    if (autoSavePromiseRef.current) {
+      await autoSavePromiseRef.current;
+    }
+  }, [saveProviderNow]);
+
+  React.useEffect(() => {
+    if (!showModal || !isEditing) return;
+    const {providerId, payload} = buildProviderPayload();
+    if (!providerId) return;
+    if (!hasVersionedApiBasePath(payload.base_url || '')) {
+      setAutoSaveState('idle');
+      return;
+    }
+
+    const payloadKey = JSON.stringify(payload);
+    if (payloadKey === lastAutoSavedPayloadRef.current) {
+      return;
+    }
+
+    setAutoSaveState('saving');
+    if (autoSaveTimerRef.current !== null) {
+      window.clearTimeout(autoSaveTimerRef.current);
+    }
+    autoSaveTimerRef.current = window.setTimeout(() => {
+      autoSaveTimerRef.current = null;
+      void saveProviderNow('auto');
+    }, 700);
+
+    return () => {
+      if (autoSaveTimerRef.current !== null) {
+        window.clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+    };
+  }, [buildProviderPayload, isEditing, saveProviderNow, showModal]);
+
   const handleOpenModal = (provider?: ProviderRow) => {
     if (provider) {
       providersEdit.openEdit(provider);
@@ -223,57 +370,11 @@ export default function ProvidersView() {
   );
 
   const handleSaveProvider = async () => {
-    const providerId = formData.provider.trim().toLowerCase();
-    if (!providerId) return;
     if (!isEditing && formData.keys.every((k) => !k.key.trim())) {
         providersEdit.setError(t('providers.error_key_required'));
         return;
     }
-    if (!hasVersionedApiBasePath(formData.base_url || '')) {
-      providersEdit.setError(t('providers.error_base_url_requires_version'));
-      return;
-    }
-    
-    setSaving(true);
-    providersEdit.setError(null);
-    const resumeLabel = formData.keys[selectedKeyIndex]?.label;
-    const resumeIndex = selectedKeyIndex;
-    try {
-      const nextFormData = applyCatalogEditorToFormData(catalogEditorValue);
-      providersEdit.setFormData(nextFormData);
-      const res = await apiPut(`/api/provider-keys/${encodeURIComponent(providerId)}`, {
-        ...nextFormData,
-        provider: providerId,
-      });
-      // Artificial delay to make the "Saving..." state perceivable and satisfying
-      await new Promise(resolve => setTimeout(resolve, 800));
-      // Give a brief visual feedback before closing or updating
-      setActionFeedback({
-        target: 'save',
-        kind: 'connection',
-        ok: true,
-        msg: t('providers.save_success'),
-      });
-      
-      const rows = await loadProviders();
-      const fresh = rows?.find((p) => p.provider === providerId);
-      if (fresh) {
-        providersEdit.openEdit(fresh);
-        const idx = fresh.keys.findIndex((k) => (k.label || '') === (resumeLabel || ''));
-        setSelectedKeyIndex(
-          idx >= 0 ? idx : Math.min(resumeIndex, Math.max(fresh.keys.length - 1, 0)),
-        );
-      }
-      
-      window.setTimeout(() => {
-        setActionFeedback((cur) => (cur?.target === 'save' ? null : cur));
-      }, 3000);
-    } catch (err: any) {
-      console.error('Failed to save provider:', err);
-      providersEdit.setError(err.message || t('providers.unknown_error'));
-    } finally {
-      setSaving(false);
-    }
+    await saveProviderNow('manual');
   };
 
   const handleDeleteProvider = async (provider: string) => {
@@ -283,6 +384,7 @@ export default function ProvidersView() {
   };
 
   const handleRefreshModelCatalog = async (providerId: string, keyId?: string) => {
+    await flushPendingAutoSave();
     const targetId = keyId ? `${providerId}::${keyId}` : providerId;
     setBusyAction({target: targetId, kind: 'catalog'});
     setActionFeedback({
@@ -342,6 +444,7 @@ export default function ProvidersView() {
   };
 
   const handleTestProviderConnection = async (providerId: string, keyId: string) => {
+    await flushPendingAutoSave();
     const targetId = `${providerId}::${keyId}`;
     setBusyAction({target: targetId, kind: 'connection'});
     setActionFeedback({
@@ -568,7 +671,7 @@ export default function ProvidersView() {
 
       <Dialog open={showModal} onClose={() => providersEdit.close()} className="relative z-50">
         <DialogBackdrop className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity" />
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+        <div className="scrollbar-hover fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4 sm:p-6">
             <DialogPanel className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden text-left">
               <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white">
                 <div>
@@ -589,7 +692,7 @@ export default function ProvidersView() {
               </div>
             )}
 
-            <div className="flex-1 overflow-auto px-5 py-5 space-y-4">
+            <div className="scrollbar-hover flex-1 space-y-4 overflow-auto px-5 py-5">
               <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4">
                 <div className={`grid gap-3 ${providerSettingsGridClass}`}>
                   <div className="min-w-0 space-y-2">
@@ -892,7 +995,7 @@ export default function ProvidersView() {
                             }}
                             placeholder={t('providers.supported_models_placeholder')}
                             spellCheck={false}
-                            className="min-h-[12rem] w-full flex-1 resize-y rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 font-mono text-[12px] leading-6 text-zinc-800 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                            className="scrollbar-hover min-h-[12rem] w-full flex-1 resize-y rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 font-mono text-[12px] leading-6 text-zinc-800 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
                           />
                           <div className="flex items-center justify-between gap-3 text-[11px] text-zinc-500">
                             <span>{t('providers.catalog_models_list')}</span>
@@ -908,6 +1011,13 @@ export default function ProvidersView() {
               </div>
 </div>
             <div className="border-t px-6 py-4 bg-zinc-50/80 flex flex-col sm:flex-row sm:items-center justify-end shrink-0 gap-3">
+              {isEditing ? (
+                <div className="sm:mr-auto text-[11px] text-zinc-500">
+                  {autoSaveState === 'saving' && t('providers.saving')}
+                  {autoSaveState === 'saved' && t('providers.save_success')}
+                  {autoSaveState === 'error' && t('providers.unknown_error')}
+                </div>
+              ) : null}
               <button
                 onClick={() => providersEdit.close()}
                 className="text-[13px] font-bold text-zinc-500 hover:text-zinc-900 px-3"
@@ -915,23 +1025,25 @@ export default function ProvidersView() {
               >
                 {t('common.close')}
               </button>
-              <button
-                onClick={handleSaveProvider}
-                disabled={saving || !formData.provider.trim() || (!isEditing && formData.keys.every(k => !k.key.trim()))}
-                className="bg-purple-600 text-white rounded-lg px-6 py-2 text-sm font-semibold shadow-sm hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
-              >
-                {saving ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span>{t('providers.saving')}</span>
-                  </>
-                ) : (
-                  <span>{isEditing ? t('providers.update_provider') : t('providers.create_provider_btn')}</span>
-                )}
-              </button>
+              {!isEditing ? (
+                <button
+                  onClick={handleSaveProvider}
+                  disabled={saving || !formData.provider.trim() || formData.keys.every(k => !k.key.trim())}
+                  className="bg-purple-600 text-white rounded-lg px-6 py-2 text-sm font-semibold shadow-sm hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
+                >
+                  {saving ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>{t('providers.saving')}</span>
+                    </>
+                  ) : (
+                    <span>{t('providers.create_provider_btn')}</span>
+                  )}
+                </button>
+              ) : null}
             </div>
             </DialogPanel>
         </div>
@@ -955,7 +1067,7 @@ export default function ProvidersView() {
           ) : (
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           )}
-          <p className="min-w-0 flex-1 leading-snug font-medium">{actionFeedback.msg}</p>
+          <p className="min-w-0 flex-1 break-all leading-snug font-medium">{actionFeedback.msg}</p>
         </div>
       ) : null}
     </div>

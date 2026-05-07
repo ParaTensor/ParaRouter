@@ -30,12 +30,11 @@ pub async fn resolve_model_target(
         provider_key_id: String,
     }
 
-    let current_version = sqlx::query_scalar::<_, String>(
-        "SELECT current_version FROM pricing_state WHERE id = 1",
-    )
-    .fetch_optional(pool)
-    .await?
-    .unwrap_or_else(|| "bootstrap".to_string());
+    let current_version =
+        sqlx::query_scalar::<_, String>("SELECT current_version FROM pricing_state WHERE id = 1")
+            .fetch_optional(pool)
+            .await?
+            .unwrap_or_else(|| "bootstrap".to_string());
 
     let rows = if let Some(pid) = forced_provider_account_id.filter(|s| !s.is_empty()) {
         sqlx::query_as::<_, PricingRow>(

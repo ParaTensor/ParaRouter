@@ -379,7 +379,6 @@ export default function PricingView() {
       <EditPriceModal 
         isOpen={drawerOpen}
         onClose={() => pricingEdit.closeEditDrawer()}
-        status={status} setStatus={pricingEdit.setStatus}
         model={model} setModel={pricingEdit.setModel}
         publicModelId={publicModelId} setPublicModelId={pricingEdit.setPublicModelId}
         providerModelId={providerModelId} setProviderModelId={pricingEdit.setProviderModelId}

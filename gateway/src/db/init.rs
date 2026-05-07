@@ -4,8 +4,10 @@ use sqlx::{Pool, Postgres};
 use tracing::info;
 
 /// Same source as Hub (`hub/db.ts` initSchema); keeps gateway usable on a fresh Postgres.
-static SHARED_POSTGRES_SCHEMA: &str =
-    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../packages/shared/schema.sql"));
+static SHARED_POSTGRES_SCHEMA: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../packages/shared/schema.sql"
+));
 
 /// Split SQL on `;` boundaries outside of `--` comments and single-quoted strings.
 fn split_postgres_statements(sql: &str) -> Vec<String> {
@@ -96,4 +98,3 @@ pub async fn try_database_with_url(url: Option<&str>) -> Result<DatabasePool> {
     ensure_schema_postgres(&pool).await?;
     Ok(DatabasePool::Postgres(pool))
 }
-

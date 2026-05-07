@@ -2,7 +2,6 @@ import React from 'react';
 import { Zap } from 'lucide-react';
 import { Select } from '../../components/Select';
 import { Dialog, DialogBackdrop, DialogPanel } from '@headlessui/react';
-import { useNavigate } from 'react-router-dom';
 import { ProviderKeyRow, DrawerTab, PricingPreview, PricingRow, PublishedPricingRow } from './types';
 import { useTranslation } from "react-i18next";
 import { cn } from '../../lib/utils';
@@ -166,17 +165,56 @@ function labelForGlobalModelRow(m: { id: string; name?: string }) {
   return `${name} — ${id}`;
 }
 
-/** 与 hub 拉目录逻辑一致：目录项可为全局 id 或与 id 尾段一致的上游名。 */
-function globalModelMatchesProviderCatalog(globalId: string, catalog: string[]): boolean {
-  if (!String(globalId || '').trim() || catalog.length === 0) return false;
-  const g = globalId.trim();
-  const gSuf = g.includes('/') ? g.split('/').pop()! : g;
+function canonicalCatalogModelKey(value: string) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .split(/[\/._-]+/)
+    .filter(Boolean)
+    .join(':');
+}
+
+function matchesProviderCatalogExactly(value: string, catalog: string[]): boolean {
+  if (!String(value || '').trim() || catalog.length === 0) return false;
+  const raw = value.trim();
+  const suffix = raw.includes('/') ? raw.split('/').pop()! : raw;
+
   return catalog.some((c) => {
     const cv = String(c || '').trim();
     if (!cv) return false;
-    if (cv.toLowerCase() === g.toLowerCase()) return true;
-    return cv.toLowerCase() === gSuf.toLowerCase();
+    if (cv.toLowerCase() === raw.toLowerCase()) return true;
+    return cv.toLowerCase() === suffix.toLowerCase();
   });
+}
+
+function findMatchingProviderCatalogValue(value: string, catalog: string[]): string {
+  if (!String(value || '').trim() || catalog.length === 0) return '';
+  const raw = value.trim();
+  const suffix = raw.includes('/') ? raw.split('/').pop()! : raw;
+
+  const direct = catalog.find((candidate) => String(candidate || '').trim().toLowerCase() === raw.toLowerCase());
+  if (direct) return direct.trim();
+
+  const bySuffix = catalog.find((candidate) => String(candidate || '').trim().toLowerCase() === suffix.toLowerCase());
+  return bySuffix?.trim() ?? '';
+}
+
+function findCanonicalProviderCatalogSuggestion(value: string, catalog: string[]): string | null {
+  if (!String(value || '').trim() || catalog.length === 0) return null;
+  const raw = value.trim();
+  const suffix = raw.includes('/') ? raw.split('/').pop()! : raw;
+  const rawKey = canonicalCatalogModelKey(raw);
+  const suffixKey = canonicalCatalogModelKey(suffix);
+  const matches = catalog.filter((candidate) => {
+    const cv = String(candidate || '').trim();
+    if (!cv) return false;
+    if (matchesProviderCatalogExactly(cv, [raw, suffix])) return false;
+
+    const cvKey = canonicalCatalogModelKey(cv);
+    return cvKey === rawKey || cvKey === suffixKey;
+  });
+
+  return matches.length === 1 ? matches[0].trim() : null;
 }
 
 /** Merge official benchmark × multipliers into current price strings (same rules as applyRates). */
@@ -215,8 +253,6 @@ export function mergeAppliedRates(
 interface EditPriceModalProps {
   isOpen: boolean;
   onClose: () => void;
-  status: 'online' | 'paused' | 'offline';
-  setStatus: (status: 'online' | 'paused' | 'offline') => void;
   model: string;
   setModel: (m: string) => void;
   publicModelId: string;
@@ -271,7 +307,6 @@ interface EditPriceModalProps {
 
 export default function EditPriceModal({
   isOpen, onClose,
-  status, setStatus,
   model, setModel,
   publicModelId, setPublicModelId,
   providerModelId, setProviderModelId,
@@ -288,7 +323,6 @@ export default function EditPriceModal({
   handlePreview, saveDraft, handlePublish, preview, draft, published
 }: EditPriceModalProps) {
     const { t } = useTranslation();
-  const navigate = useNavigate();
 
   const [formError, setFormError] = React.useState<string | null>(null);
   const [costMultiplier, setCostMultiplier] = React.useState('1.0');
@@ -302,11 +336,16 @@ export default function EditPriceModal({
   const keyCatalog = Array.isArray(selectedKey?.supported_models) ? selectedKey!.supported_models! : [];
   const accountCatalog = Array.isArray(selectedProvider?.supported_models) ? selectedProvider!.supported_models! : [];
   const providerCatalogForKey = keyCatalog.length > 0 ? keyCatalog : accountCatalog;
+  const providerCatalogTarget = providerModelId.trim() || model.trim();
+  const matchedProviderCatalogValue = findMatchingProviderCatalogValue(providerModelId, providerCatalogForKey);
+  const suggestedProviderModelId = providerModelId.trim()
+    ? findCanonicalProviderCatalogSuggestion(providerModelId, providerCatalogForKey)
+    : findCanonicalProviderCatalogSuggestion(model, providerCatalogForKey);
   const showModelNotInProviderCatalog = Boolean(
     providerKeyId &&
-      model.trim() &&
+      providerCatalogTarget &&
       providerCatalogForKey.length > 0 &&
-      !globalModelMatchesProviderCatalog(model, providerCatalogForKey),
+      !matchesProviderCatalogExactly(providerCatalogTarget, providerCatalogForKey),
   );
 
   /** 下拉选项始终来自 /api/llm-models 全量，不按密钥 supported_models 过滤。 */
@@ -339,7 +378,7 @@ export default function EditPriceModal({
       setActivePriceView('sales');
       lastRateSeedRef.current = '';
       // Reset ref when closed to force recalculation if the same model is opened again
-      lastPopRef.current = { model: '', providerKeyId: '' };
+      lastPopRef.current = { model: '', providerKeyId: '', providerAccountId: '' };
       return;
     }
 
@@ -479,7 +518,6 @@ export default function EditPriceModal({
   };
 
   const onPublish = async () => {
-    if (showModelNotInProviderCatalog) return;
     const merged = mergeAppliedRates(model, costMultiplier, salesMultiplier, globalModels, {
       inputCost,
       outputCost,
@@ -591,20 +629,6 @@ export default function EditPriceModal({
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('pricingtable.status')}</label>
-                      <Select
-                        className="[&_button]:h-10 [&_button]:rounded-lg [&_button]:border-zinc-200 [&_button]:focus:ring-2 [&_button]:focus:ring-purple-500/30 [&_button]:focus:ring-offset-0 [&_button]:focus:border-purple-500"
-                        value={status}
-                        onChange={(val) => setStatus(val as 'online' | 'paused' | 'offline')}
-                        options={[
-                          { value: 'online', label: t('pricingtable.online') },
-                          { value: 'paused', label: t('pricingtable.paused') },
-                          { value: 'offline', label: t('pricingtable.offline') },
-                        ]}
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
                       <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('editpricemodal.global_model_label')}</label>
                       <Select
                         className="[&_button]:h-10 [&_button]:rounded-lg [&_button]:border-zinc-200 [&_button]:focus:ring-2 [&_button]:focus:ring-purple-500/30 [&_button]:focus:ring-offset-0 [&_button]:focus:border-purple-500"
@@ -658,37 +682,70 @@ export default function EditPriceModal({
                       className="w-full h-10 min-h-10 px-3 text-sm leading-none border border-zinc-200 rounded-lg bg-white placeholder:text-[11px] placeholder:text-zinc-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
                       placeholder={t('editpricemodal.placeholder_alias')}
                     />
+                    {providerCatalogForKey.length > 0 ? (
+                      <div className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
+                        <p className="text-[11px] leading-relaxed text-zinc-600">
+                          {t('providers.provider_model_catalog_hint', { count: providerCatalogForKey.length })}
+                        </p>
+                        <Select
+                          className="[&_button]:h-10 [&_button]:rounded-lg [&_button]:border-zinc-200 [&_button]:bg-white [&_button]:focus:ring-2 [&_button]:focus:ring-purple-500/30 [&_button]:focus:ring-offset-0 [&_button]:focus:border-purple-500"
+                          value={matchedProviderCatalogValue}
+                          onChange={(val) => setProviderModelId(val)}
+                          placeholder={t('providers.provider_model_catalog_select_placeholder')}
+                          options={providerCatalogForKey.map((catalogModel) => ({
+                            value: catalogModel,
+                            label: catalogModel,
+                            title: catalogModel,
+                          }))}
+                        />
+                      </div>
+                    ) : null}
+                    {suggestedProviderModelId && !showModelNotInProviderCatalog ? (
+                      <div className="flex flex-col gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-[11px] leading-relaxed text-sky-900">
+                          {t('editpricemodal.provider_model_id_suggestion_hint', { model: suggestedProviderModelId })}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setProviderModelId(suggestedProviderModelId)}
+                          className="shrink-0 rounded-lg border border-sky-300 bg-white px-3 py-2 text-xs font-semibold text-sky-900 transition-colors hover:bg-sky-100"
+                        >
+                          {t('editpricemodal.use_suggested_provider_model_id')}
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
 
                   {showModelNotInProviderCatalog ? (
                     <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 sm:flex-row sm:items-start sm:justify-between">
-                      <p className="text-xs leading-relaxed text-amber-900">
-                        {t('editpricemodal.provider_catalog_mismatch', {model: model.trim()})}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onClose();
-                          const params = new URLSearchParams();
-                          if (providerAccountId.trim()) params.set('provider', providerAccountId.trim());
-                          if (providerKeyId.trim()) params.set('key', providerKeyId.trim());
-                          const query = params.toString();
-                          navigate(query ? `/providers?${query}` : '/providers');
-                        }}
-                        className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100"
-                      >
-                        {t('editpricemodal.open_provider_catalog_editor')}
-                      </button>
+                      <div className="space-y-2">
+                        <p className="text-xs leading-relaxed text-amber-900">
+                          {t('providers.provider_model_mismatch_warning', {
+                            count: providerCatalogForKey.length,
+                            model: providerCatalogTarget,
+                          })}
+                        </p>
+                        {suggestedProviderModelId ? (
+                          <p className="text-[11px] leading-relaxed text-amber-900/90">
+                            {t('editpricemodal.provider_model_id_suggestion_hint', { model: suggestedProviderModelId })}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+                        {suggestedProviderModelId ? (
+                          <button
+                            type="button"
+                            onClick={() => setProviderModelId(suggestedProviderModelId)}
+                            className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100"
+                          >
+                            {t('editpricemodal.use_suggested_provider_model_id')}
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   ) : null}
 
-                  <div
-                    className={cn(
-                      'space-y-3',
-                      showModelNotInProviderCatalog && 'pointer-events-none opacity-45',
-                    )}
-                    inert={showModelNotInProviderCatalog || undefined}
-                  >
+                  <div className="space-y-3">
                   <div className="rounded-xl border border-zinc-200/90 bg-zinc-50/40 p-2.5 space-y-0">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       <div className="space-y-1 min-w-0">
@@ -876,13 +933,7 @@ export default function EditPriceModal({
             </div>
           </div>
 
-          <div
-            className={cn(
-              'w-[300px] sm:w-[320px] bg-zinc-50/50 p-4 flex flex-col shrink-0 border-l border-zinc-100',
-              showModelNotInProviderCatalog && 'pointer-events-none opacity-45',
-            )}
-            inert={showModelNotInProviderCatalog || undefined}
-          >
+          <div className="w-[300px] sm:w-[320px] bg-zinc-50/50 p-4 flex flex-col shrink-0 border-l border-zinc-100">
             <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">{t('editpricemodal.live_preview')}</h4>
             
             <div className="bg-white border border-zinc-200 rounded-xl p-3 shadow-sm flex flex-col pointer-events-none relative overflow-hidden">
@@ -999,7 +1050,7 @@ export default function EditPriceModal({
           </div>
           <div className="flex items-center gap-3">
             <button type="button" onClick={onClose} className="text-sm font-semibold text-zinc-600 hover:text-zinc-900 px-4 py-2 rounded-lg border border-transparent hover:border-zinc-200 hover:bg-white transition-colors">{t('editpricemodal.cancel')}</button>
-            <button type="button" onClick={onPublish} disabled={busy || providers.length === 0 || !model.trim() || showModelNotInProviderCatalog} className="bg-purple-600 text-white rounded-lg h-10 min-h-10 px-6 text-sm font-semibold shadow-sm hover:bg-purple-700 disabled:opacity-50">
+            <button type="button" onClick={onPublish} disabled={busy || providers.length === 0 || !model.trim()} className="bg-purple-600 text-white rounded-lg h-10 min-h-10 px-6 text-sm font-semibold shadow-sm hover:bg-purple-700 disabled:opacity-50">
               {t('editpricemodal.publish')}</button>
           </div>
         </div>

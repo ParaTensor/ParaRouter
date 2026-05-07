@@ -124,6 +124,7 @@
     "dismiss_reminder": "閉じる",
     "provider_model_catalog_hint": "このプロバイダーでは {{count}} 件の上流モデルを同期済みです。入力候補から選ぶか、引き続き手動で入力できます。",
     "provider_model_mismatch_warning": "このプロバイダーは {{count}} 件の上流モデルを返していますが、{{model}} はその一覧に含まれていません。この価格設定は保存できますが、正確な上流モデル id を使うまではリクエストが失敗する可能性があります。",
+    "provider_model_catalog_select_placeholder": "同期済みカタログからプロバイダーモデル id を選択…",
     "supported_models_placeholder": "1 行に 1 つずつ model id を入力します。例:\nclaude-opus-4-6\ngpt-5.4",
     "cancel": "戻る",
     "saving": "保存中…",

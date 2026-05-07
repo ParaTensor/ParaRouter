@@ -799,7 +799,7 @@ export default function CustomersView() {
       <Dialog open={!!selectedCustomer} onClose={() => {setSelectedCustomer(null); setCustomerKeys([]);}} className="relative z-[100]">
         <DialogBackdrop className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity" />
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-            <DialogPanel className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[80vh] overflow-hidden text-left">
+            <DialogPanel className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[80vh] overflow-hidden text-left">
               <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white">
                 <div>
                   <h3 className="font-bold text-lg">{selectedCustomer ? t('customers.keys_for', {name: selectedCustomer.username}) : ''}</h3>
@@ -845,15 +845,17 @@ export default function CustomersView() {
                     <tbody className="divide-y divide-gray-50">
                       {customerKeys.map((k) => (
                         <tr key={k.id} className="hover:bg-gray-50/50 transition-colors group">
-                          <td className="px-6 py-4">
-                            <span className="font-semibold text-gray-900 text-sm">{k.name}</span>
+                          <td className="px-6 py-4 w-32">
+                            <span className="font-semibold text-gray-900 text-sm truncate block">{k.name}</span>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="flex items-center gap-2 font-mono text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded border border-gray-100 w-fit">
-                              {showKey === k.id ? k.key : `sk-••••••••${k.key.slice(-6)}`}
+                            <div className="flex items-center gap-2 font-mono text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded border border-gray-100 w-[460px] whitespace-nowrap">
+                              <span className="flex-1 tabular-nums">
+                                {showKey === k.id ? k.key : `sk-••••••••${k.key.slice(-6)}`}
+                              </span>
                               <button
                                 onClick={() => setShowKey(showKey === k.id ? null : k.id)}
-                                className="p-1 hover:bg-gray-200 rounded transition-colors"
+                                className="p-1 hover:bg-gray-200 rounded transition-colors shrink-0"
                               >
                                 {showKey === k.id ? <EyeOff size={12} /> : <Eye size={12} />}
                               </button>

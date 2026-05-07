@@ -464,6 +464,7 @@
     "dismiss_reminder": "Dismiss",
     "provider_model_catalog_hint": "This provider has {{count}} synced upstream models. Pick one from the input suggestions or keep typing a custom value.",
     "provider_model_mismatch_warning": "This provider reports {{count}} upstream models, but {{model}} is not in that list. You can still save this pricing entry, but requests may fail until the exact upstream model id is used.",
+    "provider_model_catalog_select_placeholder": "Pick the provider model id from the synced catalog…",
     "provider_model_id_suggestion_hint": "A likely upstream match was found in the synced catalog: {{model}}. If correct, fill it into the provider model field.",
     "use_suggested_provider_model_id": "Use suggested id",
     "supported_models_placeholder": "One model id per line, for example:\nclaude-opus-4-6\ngpt-5.4",

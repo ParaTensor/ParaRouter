@@ -466,6 +466,7 @@
     "dismiss_reminder": "关闭提示",
     "provider_model_catalog_hint": "该服务商已同步 {{count}} 个上游模型；可直接从输入建议中选择，也可继续手动输入。",
     "provider_model_mismatch_warning": "该服务商已同步的 {{count}} 个上游模型中不包含「{{model}}」。仍可保存本条定价，但请与上游实际模型 ID 核对一致，否则调用可能失败。",
+    "provider_model_catalog_select_placeholder": "从已同步目录中选择供应商模型名…",
     "supported_models_placeholder": "每行一个模型 id，例如：\nclaude-opus-4-6\ngpt-5.4",
     "delete": "删除"
   },

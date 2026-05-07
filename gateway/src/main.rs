@@ -8,9 +8,9 @@ use gateway::usage::stream::DatabaseStreamObservationSink;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use unigateway_sdk::core::UniGatewayEngine;
 use unigateway_sdk::core::registry::InMemoryDriverRegistry;
 use unigateway_sdk::core::transport::ReqwestHttpTransport;
+use unigateway_sdk::core::UniGatewayEngine;
 
 #[tokio::main]
 async fn main() -> Result<()> {

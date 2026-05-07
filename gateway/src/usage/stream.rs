@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::time::{Duration, Instant};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_stream::stream;
 use axum::body::{Body, Bytes};
@@ -182,14 +182,14 @@ impl StreamObservationState {
         self.emitted = true;
 
         Some(StreamObservation {
-            ttft_ms: self
-                .first_chunk_at
-                .map(|first_chunk_at| first_chunk_at.duration_since(self.started_at).as_millis() as u64),
-            max_inter_chunk_ms: self.max_inter_chunk.map(|interval| interval.as_millis() as u64),
+            ttft_ms: self.first_chunk_at.map(|first_chunk_at| {
+                first_chunk_at.duration_since(self.started_at).as_millis() as u64
+            }),
+            max_inter_chunk_ms: self
+                .max_inter_chunk
+                .map(|interval| interval.as_millis() as u64),
             chunk_count: self.chunk_count,
-            stream_duration_ms: Instant::now()
-                .duration_since(self.started_at)
-                .as_millis() as u64,
+            stream_duration_ms: Instant::now().duration_since(self.started_at).as_millis() as u64,
             completed_normally,
         })
     }
@@ -207,7 +207,11 @@ impl StreamObservationGuard {
         sink: Arc<dyn StreamObservationSink>,
         state: Arc<Mutex<StreamObservationState>>,
     ) -> Self {
-        Self { labels, sink, state }
+        Self {
+            labels,
+            sink,
+            state,
+        }
     }
 }
 

@@ -2,8 +2,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
 use latch_core::score::{
-    LatencyBreakdown, ObservationError, RequestObservation, ScoreBreakdown, ScoreConfig,
-    ScoreTier, StreamMetrics, TokenStats,
+    LatencyBreakdown, ObservationError, RequestObservation, ScoreBreakdown, ScoreConfig, ScoreTier,
+    StreamMetrics, TokenStats,
 };
 use latch_score::{PoolFeedback, ScoringEngine};
 use serde::Serialize;
@@ -292,6 +292,10 @@ mod tests {
     fn provider_score_config_disables_cost_weight() {
         let config = provider_score_config();
         assert_eq!(config.cost_weight, 0.0);
-        assert!((config.availability_weight + config.latency_weight + config.quality_weight - 1.0).abs() < 1e-6);
+        assert!(
+            (config.availability_weight + config.latency_weight + config.quality_weight - 1.0)
+                .abs()
+                < 1e-6
+        );
     }
 }

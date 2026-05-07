@@ -9,8 +9,8 @@ use crate::auth::keys::AuthenticatedUser;
 use crate::runtime::ParaRouterRuntime;
 
 pub mod anthropic;
-pub mod openai;
 pub mod models;
+pub mod openai;
 
 fn model_allowed_by_entries(
     allowed_models: &[String],
@@ -49,7 +49,9 @@ pub(crate) fn enforce_model_acl(
     }
     if let Some(key_models) = &auth.key_allowed_models {
         if !model_allowed_by_entries(key_models, requested_model, global_model_id) {
-            return Err(forbidden_model_response("Model not allowed by API key policy"));
+            return Err(forbidden_model_response(
+                "Model not allowed by API key policy",
+            ));
         }
     }
 

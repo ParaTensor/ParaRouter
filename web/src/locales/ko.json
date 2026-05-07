@@ -124,6 +124,7 @@
     "dismiss_reminder": "닫기",
     "provider_model_catalog_hint": "이 공급자는 업스트림 모델 {{count}}개를 동기화했습니다. 입력 제안에서 고르거나 계속 직접 입력할 수 있습니다.",
     "provider_model_mismatch_warning": "이 공급자는 업스트림 모델 {{count}}개를 보고하지만, {{model}} 은 그 목록에 없습니다. 이 가격 항목은 저장할 수 있지만 정확한 업스트림 모델 id 를 쓰기 전까지 요청이 실패할 수 있습니다.",
+    "provider_model_catalog_select_placeholder": "동기화된 카탈로그에서 공급자 모델 id 선택…",
     "supported_models_placeholder": "모델 id 를 한 줄에 하나씩 입력하세요. 예:\nclaude-opus-4-6\ngpt-5.4",
     "cancel": "돌아가기",
     "saving": "저장 중…",

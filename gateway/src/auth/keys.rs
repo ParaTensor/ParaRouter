@@ -47,8 +47,16 @@ impl FromRequestParts<Arc<ParaRouterRuntime>> for AuthenticatedUser {
 
         tracing::debug!(
             "Auth headers: Authorization={}, x-api-key={}",
-            if auth_header.is_empty() { "<empty>" } else { "<present>" },
-            if api_key_header.is_empty() { "<empty>" } else { "<present>" }
+            if auth_header.is_empty() {
+                "<empty>"
+            } else {
+                "<present>"
+            },
+            if api_key_header.is_empty() {
+                "<empty>"
+            } else {
+                "<present>"
+            }
         );
 
         let token = if auth_header.starts_with("Bearer ") {
@@ -56,7 +64,9 @@ impl FromRequestParts<Arc<ParaRouterRuntime>> for AuthenticatedUser {
         } else if !api_key_header.is_empty() {
             api_key_header.trim().to_string()
         } else {
-            tracing::warn!("No valid auth header found (neither Authorization: Bearer nor x-api-key)");
+            tracing::warn!(
+                "No valid auth header found (neither Authorization: Bearer nor x-api-key)"
+            );
             return Err(unauthorized_response("Missing or invalid Bearer token"));
         };
 
@@ -71,18 +81,20 @@ impl FromRequestParts<Arc<ParaRouterRuntime>> for AuthenticatedUser {
         match user {
             Some(u) => {
                 if u.balance <= 0.0 {
-                    return Err(payment_required_response("Insufficient balance. Please recharge your account."));
+                    return Err(payment_required_response(
+                        "Insufficient balance. Please recharge your account.",
+                    ));
                 }
-                
+
                 if let Some(budget) = u.budget_limit {
                     let current_usage = u.key_usage.replace("$", "").parse::<f64>().unwrap_or(0.0);
                     if current_usage >= budget {
                         return Err(payment_required_response("API Key budget limit exceeded."));
                     }
                 }
-                
+
                 Ok(u)
-            },
+            }
             None => Err(unauthorized_response("Invalid API key")),
         }
     }
