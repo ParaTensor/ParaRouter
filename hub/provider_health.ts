@@ -109,6 +109,7 @@ async function loadProbeTargets(providerAccountId: string, providerKeyId: string
     [providerAccountId, providerKeyId, currentVersion],
   );
   if (rows.length > 0) {
+    console.log(`[loadProbeTargets] Found ${rows.length} pricing targets for ${providerAccountId}::${providerKeyId}`);
     return { targets: rows, error: null };
   }
 
@@ -142,6 +143,7 @@ async function loadProbeTargets(providerAccountId: string, providerKeyId: string
 
   const baseUrl = String(catalogRow.base_url || '').trim();
   const apiKey = String(catalogRow.api_key || '').trim();
+  console.log(`[loadProbeTargets] Catalog fetch for ${providerAccountId}::${providerKeyId}, Base URL: ${baseUrl}`);
   if (!baseUrl || !apiKey) {
     return { targets: [], error: 'Missing base URL or API key for probe catalog fetch' };
   }
@@ -171,7 +173,7 @@ async function loadProbeTargets(providerAccountId: string, providerKeyId: string
   };
 }
 
-async function probeOpenAiCompatible(baseUrl: string, apiKey: string, model: string) {
+export async function probeOpenAiCompatible(baseUrl: string, apiKey: string, model: string) {
   const baseUrlError = validateProviderBaseUrl(baseUrl, 'openai_compatible');
   if (baseUrlError) {
     return { ok: false, status: 500, error: baseUrlError };
@@ -214,7 +216,7 @@ async function probeOpenAiCompatible(baseUrl: string, apiKey: string, model: str
   }
 }
 
-async function probeAnthropic(baseUrl: string, apiKey: string, model: string) {
+export async function probeAnthropic(baseUrl: string, apiKey: string, model: string) {
   const baseUrlError = validateProviderBaseUrl(baseUrl, 'anthropic');
   if (baseUrlError) {
     return { ok: false, status: 500, error: baseUrlError };
@@ -405,6 +407,7 @@ async function runProbeForKey(
     };
   }
 
+  console.log(`[runProbeForKey] Probing ${row.provider_account_id}::${row.id}, Base URL: ${row.base_url}, Model: ${probeModel}`);
   const probe = driverType === 'anthropic'
     ? await probeAnthropic(row.base_url, row.api_key, probeModel)
     : await probeOpenAiCompatible(row.base_url, row.api_key, probeModel);
@@ -487,7 +490,6 @@ export async function runProviderHealthChecks(providerAccountId?: string) {
        k.provider_account_id,
        k.label,
        k.api_key,
-       a.label AS account_label,
        COALESCE(k.health_status, 'unknown') AS health_status,
        k.health_checked_at,
        k.health_last_ok_at,
@@ -509,6 +511,7 @@ export async function runProviderHealthChecks(providerAccountId?: string) {
 
   const results: ProviderHealthCheckResult[] = [];
   for (const row of rows) {
+    console.log(`[HealthCheck] Provider: ${row.provider_account_id}, Base URL: ${row.base_url}`);
     const { targets, error } = await loadProbeTargets(row.provider_account_id, row.id);
     const probeTarget = targets[0] || null;
     results.push(await runProbeForKey(row, probeTarget, error));

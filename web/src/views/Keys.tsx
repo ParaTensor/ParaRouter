@@ -4,6 +4,7 @@ import {Dialog, DialogBackdrop, DialogPanel} from '@headlessui/react';
 import {apiDelete, apiGet, apiPatch, apiPost} from '../lib/api';
 import {getAuthSession} from '../lib/session';
 import { useTranslation } from "react-i18next";
+import ConfirmDialog from '../components/ConfirmDialog';
 
 interface APIKey {
   id: string;
@@ -28,6 +29,12 @@ export default function KeysView() {
   const [newKeyName, setNewKeyName] = useState('');
   const [newBudgetLimit, setNewBudgetLimit] = useState('');
   const [selectedAllowedModelIds, setSelectedAllowedModelIds] = useState<string[]>([]);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   const [modelRegistry, setModelRegistry] = useState<{id: string; name: string}[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelFilter, setModelFilter] = useState('');
@@ -162,15 +169,21 @@ export default function KeysView() {
   };
 
   const handleDeleteKey = async (id: string) => {
-    if (!window.confirm(t('keys.delete_confirm'))) return;
-    try {
-      await apiDelete(`/api/user-api-keys/${id}`);
-      await loadKeys();
-      showNotification(t('keys.delete_success'), 'success');
-    } catch (error: any) {
-      console.error('Failed to delete key:', error);
-      showNotification(error?.message || t('keys.delete_failed'), 'error');
-    }
+    setConfirmDialog({
+      isOpen: true,
+      title: '删除 Key',
+      message: t('keys.delete_confirm'),
+      onConfirm: async () => {
+        try {
+          await apiDelete(`/api/user-api-keys/${id}`);
+          await loadKeys();
+          showNotification(t('keys.delete_success'), 'success');
+        } catch (error: any) {
+          console.error('Failed to delete key:', error);
+          showNotification(error?.message || t('keys.delete_failed'), 'error');
+        }
+      },
+    });
   };
 
   const copyToClipboard = (text: string, id: string) => {
@@ -454,6 +467,15 @@ export default function KeysView() {
           </DialogPanel>
         </div>
       </Dialog>
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        variant="danger"
+      />
     </div>
   );
 }

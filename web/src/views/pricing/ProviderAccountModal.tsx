@@ -50,13 +50,8 @@ export default function ProviderAccountModal({ isOpen, onClose, onSuccess }: Pro
         docs_url: newProvider.docs_url,
         status: newProvider.status,
         driver_type: newProvider.driver_type,
-        keys: [
-          {
-            label: 'Default',
-            key: newProvider.key,
-            status: newProvider.status,
-          },
-        ],
+        key: newProvider.key,
+        key_status: newProvider.status,
       });
       onSuccess(provider);
       onClose();
@@ -126,7 +121,7 @@ export default function ProviderAccountModal({ isOpen, onClose, onSuccess }: Pro
                 ]}
               />
             </div>
-            <p className="text-xs text-zinc-400">{t('provideraccountmodal.the_protocol_driver_to_use_for')}</p>
+            <p className="text-xs text-zinc-400">上游服务商的 API 协议类型</p>
           </div>
 
           <div className="space-y-1">

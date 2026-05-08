@@ -261,8 +261,6 @@ interface EditPriceModalProps {
   setProviderModelId: (m: string) => void;
   providerAccountId: string;
   setProviderAccountId: (id: string) => void;
-  providerKeyId: string;
-  setProviderKeyId: (id: string) => void;
   formPriceMode: 'fixed' | 'markup';
   setFormPriceMode: (mode: 'fixed' | 'markup') => void;
   inputCost: string;
@@ -310,7 +308,7 @@ export default function EditPriceModal({
   model, setModel,
   publicModelId, setPublicModelId,
   providerModelId, setProviderModelId,
-  providerAccountId, setProviderAccountId, providerKeyId, setProviderKeyId,
+  providerAccountId, setProviderAccountId,
   formPriceMode, setFormPriceMode,
   inputCost, setInputCost, outputCost, setOutputCost,
   cacheReadCost, setCacheReadCost, cacheWriteCost, setCacheWriteCost,
@@ -330,22 +328,17 @@ export default function EditPriceModal({
   const [activePriceView, setActivePriceView] = React.useState<'sales' | 'cost'>('sales');
 
   const selectedProvider = providerKeyRows.find((row) => row.provider === providerAccountId);
-  const selectedKey = selectedProvider?.keys?.find((k) => (k as { id?: string }).id === providerKeyId) as
-    | { id?: string; supported_models?: string[] }
-    | undefined;
-  const keyCatalog = Array.isArray(selectedKey?.supported_models) ? selectedKey!.supported_models! : [];
-  const accountCatalog = Array.isArray(selectedProvider?.supported_models) ? selectedProvider!.supported_models! : [];
-  const providerCatalogForKey = keyCatalog.length > 0 ? keyCatalog : accountCatalog;
+  const providerCatalog = Array.isArray(selectedProvider?.supported_models) ? selectedProvider!.supported_models! : [];
   const providerCatalogTarget = providerModelId.trim() || model.trim();
-  const matchedProviderCatalogValue = findMatchingProviderCatalogValue(providerModelId, providerCatalogForKey);
+  const matchedProviderCatalogValue = findMatchingProviderCatalogValue(providerModelId, providerCatalog);
   const suggestedProviderModelId = providerModelId.trim()
-    ? findCanonicalProviderCatalogSuggestion(providerModelId, providerCatalogForKey)
-    : findCanonicalProviderCatalogSuggestion(model, providerCatalogForKey);
+    ? findCanonicalProviderCatalogSuggestion(providerModelId, providerCatalog)
+    : findCanonicalProviderCatalogSuggestion(model, providerCatalog);
   const showModelNotInProviderCatalog = Boolean(
-    providerKeyId &&
+    providerAccountId &&
       providerCatalogTarget &&
-      providerCatalogForKey.length > 0 &&
-      !matchesProviderCatalogExactly(providerCatalogTarget, providerCatalogForKey),
+      providerCatalog.length > 0 &&
+      !matchesProviderCatalogExactly(providerCatalogTarget, providerCatalog),
   );
 
   /** 下拉选项始终来自 /api/llm-models 全量，不按密钥 supported_models 过滤。 */
@@ -378,11 +371,11 @@ export default function EditPriceModal({
       setActivePriceView('sales');
       lastRateSeedRef.current = '';
       // Reset ref when closed to force recalculation if the same model is opened again
-      lastPopRef.current = { model: '', providerKeyId: '', providerAccountId: '' };
+      lastPopRef.current = { model: '', providerAccountId: '' };
       return;
     }
 
-    const seed = [model.trim(), providerAccountId.trim(), providerKeyId.trim(), globalModels.length].join('::');
+    const seed = [model.trim(), providerAccountId.trim(), globalModels.length].join('::');
     if (seed === lastRateSeedRef.current) {
       return;
     }
@@ -412,32 +405,29 @@ export default function EditPriceModal({
     outputCost,
     outputPrice,
     providerAccountId,
-    providerKeyId,
   ]);
 
-  const lastPopRef = React.useRef({ model: '', providerKeyId: '', providerAccountId: '' });
+  const lastPopRef = React.useRef({ model: '', providerAccountId: '' });
   React.useEffect(() => {
     if (!isOpen) {
-      lastPopRef.current = { model: '', providerKeyId: '', providerAccountId: '' };
+      lastPopRef.current = { model: '', providerAccountId: '' };
       return;
     }
 
     if (
       model === lastPopRef.current.model &&
-      providerKeyId === lastPopRef.current.providerKeyId &&
       providerAccountId === lastPopRef.current.providerAccountId
     ) {
       return;
     }
-    lastPopRef.current = { model, providerKeyId, providerAccountId };
+    lastPopRef.current = { model, providerAccountId };
 
-    if (!model || !providerKeyId) return;
+    if (!model || !providerAccountId) return;
 
     const matchingRow = (d: PricingRow) => {
       const draftGlobalModelId = (d.global_model_id || d.model || '').trim();
       return (
         draftGlobalModelId === model &&
-        d.provider_key_id === providerKeyId &&
         (d.provider_account_id || '') === providerAccountId
       );
     };
@@ -476,7 +466,6 @@ export default function EditPriceModal({
     isOpen,
     model,
     providerAccountId,
-    providerKeyId,
     published,
     setFormPriceMode, setInputCost, setOutputCost, setCacheReadCost,
     setCacheWriteCost, setReasoningCost, setInputPrice, setOutputPrice,
@@ -493,8 +482,8 @@ export default function EditPriceModal({
       setFormError(t('editpricemodal.error_model_registry'));
       return false;
     }
-    // Check key
-    if (!providerKeyId) {
+    // Check provider
+    if (!providerAccountId) {
       setFormError(t('editpricemodal.error_key_required'));
       return false;
     }
@@ -608,22 +597,19 @@ export default function EditPriceModal({
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('editpricemodal.cost_channel_key')}</label>
+                      <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">服务商账号</label>
                       <Select
                         className="[&_button]:h-10 [&_button]:rounded-lg [&_button]:border-zinc-200 [&_button]:focus:ring-2 [&_button]:focus:ring-purple-500/30 [&_button]:focus:ring-offset-0 [&_button]:focus:border-purple-500"
-                        value={providerKeyId}
+                        value={providerAccountId}
                         onChange={(val) => {
-                          setProviderKeyId(val);
-                          const selectedP = providerKeyRows.find(p => p.keys && p.keys.some(k => k.id === val));
-                          if(selectedP) setProviderAccountId(selectedP.provider);
+                          setProviderAccountId(val);
                         }}
                         options={[
-                          { value: '', label: t('editpricemodal.select_key_channel') },
-                          ...providerKeyRows
-                            .flatMap(p => (p.keys || []).filter(k => !!k.id).map(k => ({
-                              value: k.id as string,
-                              label: `${p.provider} / ${k.label}`
-                            })))
+                          { value: '', label: '选择服务商账号' },
+                          ...providerKeyRows.map(p => ({
+                            value: p.provider,
+                            label: p.label || p.provider
+                          }))
                         ]}
                       />
                     </div>
@@ -682,17 +668,17 @@ export default function EditPriceModal({
                       className="w-full h-10 min-h-10 px-3 text-sm leading-none border border-zinc-200 rounded-lg bg-white placeholder:text-[11px] placeholder:text-zinc-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
                       placeholder={t('editpricemodal.placeholder_alias')}
                     />
-                    {providerCatalogForKey.length > 0 ? (
+                    {providerCatalog.length > 0 ? (
                       <div className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
                         <p className="text-[11px] leading-relaxed text-zinc-600">
-                          {t('providers.provider_model_catalog_hint', { count: providerCatalogForKey.length })}
+                          {t('providers.provider_model_catalog_hint', { count: providerCatalog.length })}
                         </p>
                         <Select
                           className="[&_button]:h-10 [&_button]:rounded-lg [&_button]:border-zinc-200 [&_button]:bg-white [&_button]:focus:ring-2 [&_button]:focus:ring-purple-500/30 [&_button]:focus:ring-offset-0 [&_button]:focus:border-purple-500"
                           value={matchedProviderCatalogValue}
                           onChange={(val) => setProviderModelId(val)}
                           placeholder={t('providers.provider_model_catalog_select_placeholder')}
-                          options={providerCatalogForKey.map((catalogModel) => ({
+                          options={providerCatalog.map((catalogModel) => ({
                             value: catalogModel,
                             label: catalogModel,
                             title: catalogModel,

@@ -3,24 +3,10 @@ import { useSyncExternalStore } from 'react';
 /**
  * 服务商编辑弹窗的模块级 store（HMR 或路由重挂时仍保留，避免未保存内容丢失）。
  */
-export type ProviderKey = {
-  id?: string;
-  label: string;
-  key: string;
-  status: string;
-  health_status?: string | null;
-  health_checked_at?: number | string | null;
-  health_last_ok_at?: number | string | null;
-  health_error?: string | null;
-  health_fail_count?: number | null;
-  health_alert_sent_at?: number | string | null;
-  supported_models?: string[];
-  supported_models_updated_at?: number | string | null;
-};
-
 export type ProviderRow = {
   provider: string;
   status: string;
+  key_id?: string;
   label?: string;
   provider_type?: string;
   driver_type?: string;
@@ -28,7 +14,14 @@ export type ProviderRow = {
   docs_url?: string;
   supported_models?: string[];
   supported_models_updated_at?: number | string | null;
-  keys: ProviderKey[];
+  key: string;
+  key_status: string;
+  health_status?: string | null;
+  health_checked_at?: number | string | null;
+  health_last_ok_at?: number | string | null;
+  health_error?: string | null;
+  health_fail_count?: number | null;
+  health_alert_sent_at?: number | string | null;
 };
 
 export const DEFAULT_PROVIDER: ProviderRow = {
@@ -38,7 +31,8 @@ export const DEFAULT_PROVIDER: ProviderRow = {
   base_url: '',
   docs_url: '',
   status: 'active',
-  keys: [{ label: 'Default', key: '', status: 'active', supported_models: [] }],
+  key: '',
+  key_status: 'active',
 };
 
 type ProvidersEditState = {
@@ -107,7 +101,7 @@ export const providersEdit = {
         driver_type: 'openai_compatible',
         base_url: 'https://api.openai.com/v1',
         docs_url: 'https://platform.openai.com/docs',
-        keys: [{ label: 'Default', key: '', status: 'active', supported_models: [] }],
+        key_status: 'active',
       },
     });
   },
@@ -122,12 +116,8 @@ export const providersEdit = {
         driver_type: provider.driver_type || (provider.provider_type === 'anthropic' ? 'anthropic' : 'openai_compatible'),
         base_url: provider.base_url || '',
         docs_url: provider.docs_url || '',
-        keys: provider.keys
-          ? provider.keys.map((k) => ({
-              ...k,
-              supported_models: Array.isArray(k.supported_models) ? [...k.supported_models] : [],
-            }))
-          : [{ label: 'Default', key: '', status: 'active', supported_models: [] }],
+        key: provider.key || '',
+        key_status: provider.key_status || 'active',
       },
     });
   },

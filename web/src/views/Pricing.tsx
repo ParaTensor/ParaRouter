@@ -83,7 +83,6 @@ export default function PricingView() {
     contextLength,
     latencyMs,
     markupRate,
-    providerKeyId,
     discountRate,
   } = usePricingEditUi();
 
@@ -191,7 +190,7 @@ export default function PricingView() {
       latency_ms: s.latencyMs ? Number(s.latencyMs) : null,
       reasoning_price: r.reasoningPrice ? Number(r.reasoningPrice) : null,
       status: s.status,
-      provider_key_id: s.providerKeyId || '',
+      provider_key_id: s.providerAccountId || '',
     };
 
     if (!s.model.trim()) {
@@ -394,7 +393,6 @@ export default function PricingView() {
         publicModelId={publicModelId} setPublicModelId={pricingEdit.setPublicModelId}
         providerModelId={providerModelId} setProviderModelId={pricingEdit.setProviderModelId}
         providerAccountId={providerAccountId} setProviderAccountId={pricingEdit.setProviderAccountId}
-        providerKeyId={providerKeyId} setProviderKeyId={pricingEdit.setProviderKeyId}
         formPriceMode={formPriceMode} setFormPriceMode={pricingEdit.setFormPriceMode}
         inputCost={inputCost} setInputCost={pricingEdit.setInputCost}
         outputCost={outputCost} setOutputCost={pricingEdit.setOutputCost}

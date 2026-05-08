@@ -27,6 +27,7 @@ export default function GlobalModelsView() {
   const [isCreating, setIsCreating] = useState(false);
   const [editForm, setEditForm] = useState<Partial<GlobalModel>>({});
   const [providerFilter, setProviderFilter] = useState<string>('all');
+  const [formError, setFormError] = useState<string | null>(null);
 
   const loadModels = async () => {
     try {
@@ -46,6 +47,7 @@ export default function GlobalModelsView() {
   const handleEdit = (m: GlobalModel) => {
     setIsCreating(false);
     setEditForm({ ...m });
+    setFormError(null);
     setIsEditModalOpen(true);
   };
 
@@ -59,6 +61,7 @@ export default function GlobalModelsView() {
       global_pricing: {},
       updated_at: Date.now(),
     });
+    setFormError(null);
     setIsEditModalOpen(true);
   };
 
@@ -75,12 +78,12 @@ export default function GlobalModelsView() {
   const handleSave = async () => {
     const id = String(editForm.id || '').trim();
     if (!id) {
-      alert(t('globalmodels.alert_id_required'));
+      setFormError(t('globalmodels.alert_id_required'));
       return;
     }
     const name = String(editForm.name || '').trim();
     if (!name) {
-      alert(t('globalmodels.alert_name_required'));
+      setFormError(t('globalmodels.alert_name_required'));
       return;
     }
     const body = {
@@ -104,10 +107,10 @@ export default function GlobalModelsView() {
     } catch (err) {
       console.error(err);
       if (err instanceof ApiError && err.status === 409) {
-        alert(t('globalmodels.alert_duplicate_id'));
+        setFormError(t('globalmodels.alert_duplicate_id'));
         return;
       }
-      alert(isCreating ? t('globalmodels.alert_create_failed') : t('globalmodels.alert_save_failed'));
+      setFormError(isCreating ? t('globalmodels.alert_create_failed') : t('globalmodels.alert_save_failed'));
     }
   };
 
@@ -189,6 +192,11 @@ export default function GlobalModelsView() {
               </div>
             </div>
             <div className="flex-1 overflow-auto px-5 py-5 space-y-4">
+              {formError && (
+                <div className="bg-red-50 border border-red-100 rounded-xl p-3 flex gap-2 text-red-600 text-sm">
+                  <span className="font-medium">{formError}</span>
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4 md:col-span-2">
                 <div>

@@ -10,7 +10,7 @@ import {
   type ProviderCatalogFetchLogEntry,
 } from '../utils';
 import { requireRole } from '../middleware/auth';
-import { runProviderHealthChecks } from '../provider_health';
+import { runProviderHealthChecks, probeAnthropic, probeOpenAiCompatible } from '../provider_health';
 
 const router = Router();
 
@@ -25,27 +25,16 @@ function normalizeCatalogModels(raw: unknown) {
     .filter((item) => item.length > 0);
 }
 
-function mergeCatalogModels(preferred: string[], existing: string[]) {
-  const merged: string[] = [];
-  const seen = new Set<string>();
-  for (const item of [...preferred, ...existing]) {
-    const normalized = String(item || '').trim();
-    if (!normalized) continue;
-    const key = normalized.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(normalized);
-  }
-  return merged;
-}
-
 function normalizeDriverType(raw: unknown) {
   const value = String(raw || '').trim().toLowerCase();
   return value === 'anthropic' ? 'anthropic' : 'openai_compatible';
 }
 
 /** Fetches upstream /models (etc.) and persists only on success; does not clear existing catalog on failure. */
-async function refreshProviderModelCatalog(provider: string): Promise<CatalogRefreshResult> {
+async function refreshProviderModelCatalog(
+  provider: string,
+  overrides?: { apiKey?: string; baseUrl?: string; keyId?: string },
+): Promise<CatalogRefreshResult> {
   const emptyLog: ProviderCatalogFetchLogEntry[] = [];
 
   const { rows: accounts } = await pool.query(
@@ -59,22 +48,30 @@ async function refreshProviderModelCatalog(provider: string): Promise<CatalogRef
   if (!account) {
     return { ok: false, count: 0, error: 'Provider not found', fetch_log: emptyLog };
   }
-  const baseUrl = String(account.base_url || '').trim();
+  const baseUrl = String(overrides?.baseUrl || account.base_url || '').trim();
   if (!baseUrl) {
     return { ok: false, count: 0, error: 'Missing base URL', fetch_log: emptyLog };
   }
 
-  const { rows: keys } = await pool.query(
-    `SELECT api_key
-     FROM provider_api_keys
-     WHERE provider_account_id = $1 AND status = 'active'
-     ORDER BY updated_at DESC, id ASC
-     LIMIT 1`,
-    [provider],
-  );
-  const apiKey = String(keys[0]?.api_key || '').trim();
+  let apiKey = String(overrides?.apiKey || '').trim();
+  let providerKeyId = String(overrides?.keyId || '').trim();
+  if (!apiKey || !providerKeyId) {
+    const { rows: keys } = await pool.query(
+      `SELECT id, api_key
+       FROM provider_api_keys
+       WHERE provider_account_id = $1 AND status = 'active'
+       ORDER BY updated_at DESC, id ASC
+       LIMIT 1`,
+      [provider],
+    );
+    apiKey = apiKey || String(keys[0]?.api_key || '').trim();
+    providerKeyId = providerKeyId || String(keys[0]?.id || '').trim();
+  }
   if (!apiKey) {
     return { ok: false, count: 0, error: 'No active API key', fetch_log: emptyLog };
+  }
+  if (!providerKeyId) {
+    providerKeyId = `${provider}:default`;
   }
 
   const { models, fetch_log, error } = await fetchProviderSupportedModelsWithLog(baseUrl, apiKey);
@@ -84,19 +81,31 @@ async function refreshProviderModelCatalog(provider: string): Promise<CatalogRef
   }
 
   const normalizedModels = normalizeCatalogModels(models);
-  const existingModels = normalizeCatalogModels(account.supported_models);
-  const mergedModels = mergeCatalogModels(normalizedModels, existingModels);
 
   const now = Date.now();
+  if (providerKeyId) {
+    await pool.query(
+      `INSERT INTO provider_api_keys (id, provider_account_id, label, api_key, status, supported_models, supported_models_updated_at, updated_at)
+       VALUES ($1, $2, 'Default', $3, 'active', $4::jsonb, $5, $5)
+       ON CONFLICT (id)
+       DO UPDATE SET
+         api_key = CASE WHEN EXCLUDED.api_key IS NOT NULL AND EXCLUDED.api_key != '' THEN EXCLUDED.api_key ELSE provider_api_keys.api_key END,
+         status = 'active',
+         supported_models = EXCLUDED.supported_models,
+         supported_models_updated_at = EXCLUDED.supported_models_updated_at,
+         updated_at = EXCLUDED.updated_at`,
+      [providerKeyId, provider, apiKey, JSON.stringify(normalizedModels), now],
+    );
+  }
   await pool.query(
     `UPDATE provider_accounts
      SET supported_models = $2::jsonb,
          supported_models_updated_at = $3,
          updated_at = $3
      WHERE id = $1`,
-    [provider, JSON.stringify(mergedModels), now],
+    [provider, JSON.stringify(normalizedModels), now],
   );
-  return { ok: true, count: mergedModels.length, fetch_log };
+  return { ok: true, count: normalizedModels.length, fetch_log };
 }
 
 router.get('/provider-types', requireRole('admin'), async (_req, res) => {
@@ -129,7 +138,7 @@ router.get('/provider-keys', requireRole('admin'), async (_req, res) => {
        ORDER BY a.id ASC`
     );
     const { rows: keys } = await pool.query(
-          `SELECT id, provider_account_id, label, api_key, status,
+          `SELECT id, provider_account_id, label, api_key, status, updated_at,
             COALESCE(supported_models, '[]'::jsonb) AS supported_models,
             supported_models_updated_at,
               COALESCE(health_status, 'unknown') AS health_status,
@@ -158,26 +167,32 @@ router.get('/provider-keys', requireRole('admin'), async (_req, res) => {
       }
     }
 
-    const result = accounts.map(acc => ({
-      ...acc,
-      supported_models: Array.isArray(acc.supported_models) ? acc.supported_models : [],
-      keys: keys.filter(k => k.provider_account_id === acc.provider).map(k => ({
-        id: k.id,
-        label: k.label,
-        key: k.api_key,
-        status: k.status,
-        health_status: k.health_status,
-        health_checked_at: k.health_checked_at,
-        health_last_ok_at: k.health_last_ok_at,
-        health_error: k.health_error,
-        health_fail_count: k.health_fail_count,
-        health_alert_sent_at: k.health_alert_sent_at,
-        supported_models: normalizeCatalogModels(k.supported_models).length > 0
-          ? normalizeCatalogModels(k.supported_models)
-          : (keySupportedModels.get(`${acc.provider}::${k.id}`) || []),
-        supported_models_updated_at: k.supported_models_updated_at,
-      }))
-    }));
+    const result = accounts.map(acc => {
+      const accountKeys = keys
+        .filter(k => k.provider_account_id === acc.provider)
+        .sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
+      const firstKey = accountKeys[0];
+      const keyModels = Array.isArray(firstKey?.supported_models) ? firstKey.supported_models : [];
+      const supportedModels = firstKey && (firstKey.supported_models_updated_at || keyModels.length > 0)
+        ? firstKey.supported_models
+        : Array.isArray(acc.supported_models)
+          ? acc.supported_models
+          : [];
+      return {
+        ...acc,
+        supported_models: supportedModels,
+        key_id: firstKey?.id || '',
+        key: firstKey?.api_key || '',
+        key_status: firstKey?.status || 'active',
+        health_status: firstKey?.health_status || null,
+        health_checked_at: firstKey?.health_checked_at || null,
+        health_last_ok_at: firstKey?.health_last_ok_at || null,
+        health_error: firstKey?.health_error || null,
+        health_fail_count: firstKey?.health_fail_count || null,
+        health_alert_sent_at: firstKey?.health_alert_sent_at || null,
+        supported_models_updated_at: firstKey?.supported_models_updated_at || null,
+      };
+    });
     res.json(result);
   } catch (error) {
     console.error('API Error /provider-keys:', error);
@@ -188,6 +203,48 @@ router.get('/provider-keys', requireRole('admin'), async (_req, res) => {
 router.post('/provider-keys/:provider/health-check', requireRole('admin'), async (req, res) => {
   try {
     const provider = normalizeProviderId(req.params.provider || '');
+    const { api_key, base_url, driver_type } = req.body || {};
+
+    // 如果请求体中提供了配置参数，使用请求体中的参数进行测试
+    if (api_key && base_url) {
+      const normalizedDriverType = normalizeDriverType(driver_type || 'openai_compatible');
+      const baseUrlError = validateProviderBaseUrl(base_url, normalizedDriverType);
+      if (baseUrlError) {
+        return res.status(400).json({ error: baseUrlError });
+      }
+      const normalizedBaseUrl = normalizeProviderBaseUrl(base_url, normalizedDriverType);
+      
+      // 从数据库查询该 provider 支持的模型列表，使用第一个模型进行测试
+      const { rows: accountRows } = await pool.query(
+        'SELECT supported_models FROM provider_accounts WHERE id = $1',
+        [provider]
+      );
+      const account = accountRows[0];
+      const supportedModels = Array.isArray(account?.supported_models) ? account.supported_models : [];
+      const testModel = supportedModels.length > 0 ? supportedModels[0] 
+        : (normalizedDriverType === 'anthropic' ? 'claude-3-5-sonnet-20241022' : 'gpt-4o-mini');
+      
+      const probe = normalizedDriverType === 'anthropic'
+        ? await probeAnthropic(normalizedBaseUrl, api_key, testModel)
+        : await probeOpenAiCompatible(normalizedBaseUrl, api_key, testModel);
+      
+      const result = {
+        provider_account_id: provider,
+        provider_key_id: 'temp',
+        label: 'test',
+        probe_model: testModel,
+        ok: probe.ok,
+        status: probe.status,
+        health_status: probe.ok ? 'healthy' : 'unhealthy',
+        checked_at: Date.now(),
+        error: probe.error,
+      };
+      
+      res.json({ status: 'checked', provider, results: [result] });
+      return;
+    }
+
+    // 否则使用数据库中的配置进行测试
     const results = await runProviderHealthChecks(provider);
     await pool.query("SELECT pg_notify('config_changed', 'provider_keys')");
     res.json({ status: 'checked', provider, results });
@@ -224,8 +281,6 @@ router.post('/provider-keys/:provider/:keyId/refresh-model-catalog', requireRole
     }
 
     const normalizedModels = normalizeCatalogModels(models);
-    const existingModels = normalizeCatalogModels(row.supported_models);
-    const mergedModels = mergeCatalogModels(normalizedModels, existingModels);
 
     const now = Date.now();
     await pool.query(
@@ -234,14 +289,14 @@ router.post('/provider-keys/:provider/:keyId/refresh-model-catalog', requireRole
            supported_models_updated_at = $3,
            updated_at = $3
        WHERE id = $1 AND provider_account_id = $4`,
-      [keyId, JSON.stringify(mergedModels), now, provider],
+      [keyId, JSON.stringify(normalizedModels), now, provider],
     );
     await pool.query("SELECT pg_notify('config_changed', 'provider_keys')");
     res.json({
       status: 'refreshed',
       provider,
       key_id: keyId,
-      supported_models_count: mergedModels.length,
+      supported_models_count: normalizedModels.length,
       fetch_log,
     });
   } catch (error) {
@@ -256,7 +311,11 @@ router.post(
   async (req, res) => {
     try {
       const provider = normalizeProviderId(req.params.provider || '');
-      const result = await refreshProviderModelCatalog(provider);
+      const result = await refreshProviderModelCatalog(provider, {
+        keyId: String((req.body || {}).key_id || '').trim(),
+        apiKey: String((req.body || {}).api_key || '').trim(),
+        baseUrl: String((req.body || {}).base_url || '').trim(),
+      });
       if (!result.ok) {
         const status = result.error === 'Provider not found' ? 404 : 400;
         return res.status(status).json({ error: result.error, fetch_log: result.fetch_log });
@@ -284,9 +343,21 @@ router.put('/provider-keys/:provider', requireRole('admin'), async (req, res) =>
       docs_url,
       driver_type,
       keys,
+      key,
+      key_status,
+      key_id,
+      supported_models,
+      supported_models_updated_at,
     } = req.body || {};
     
-    if (!keys || !Array.isArray(keys)) {
+    // 支持单密钥结构（新）和多密钥结构（旧）
+    const isSingleKeyMode = key !== undefined && key_status !== undefined;
+    const defaultKeyId = `${provider}:default`;
+    const keysArray = isSingleKeyMode
+      ? [{id: key_id && key_id !== 'default' ? key_id : defaultKeyId, key, status: key_status || 'active', label: 'Default'}]
+      : keys;
+    
+    if (!keysArray || !Array.isArray(keysArray)) {
       return res.status(400).json({ error: 'keys array is required' });
     }
 
@@ -307,9 +378,12 @@ router.put('/provider-keys/:provider', requireRole('admin'), async (req, res) =>
     try {
       await client.query('BEGIN');
 
+      const normalizedSupportedModels = normalizeCatalogModels(supported_models);
+      const normalizedSupportedModelsUpdatedAt = supported_models_updated_at || now;
+
       await client.query(
-        `INSERT INTO provider_accounts (id, provider_type, label, base_url, docs_url, status, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO provider_accounts (id, provider_type, label, base_url, docs_url, status, supported_models, supported_models_updated_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)
          ON CONFLICT (id)
          DO UPDATE SET
           provider_type = EXCLUDED.provider_type,
@@ -317,6 +391,8 @@ router.put('/provider-keys/:provider', requireRole('admin'), async (req, res) =>
           base_url = EXCLUDED.base_url,
           docs_url = EXCLUDED.docs_url,
           status = EXCLUDED.status,
+          supported_models = EXCLUDED.supported_models,
+          supported_models_updated_at = EXCLUDED.supported_models_updated_at,
           updated_at = EXCLUDED.updated_at`,
         [
           provider,
@@ -325,12 +401,14 @@ router.put('/provider-keys/:provider', requireRole('admin'), async (req, res) =>
           normalizedBaseUrl,
           docs_url ? String(docs_url) : '',
           status || 'active',
+          JSON.stringify(normalizedSupportedModels),
+          normalizedSupportedModelsUpdatedAt,
           now,
         ],
       );
 
       // Keep track of provided key IDs to delete the ones removed
-      const providedKeyIds = keys.map(k => k.id).filter(Boolean);
+      const providedKeyIds = keysArray.map(k => k.id).filter(Boolean);
       if (providedKeyIds.length > 0) {
         await client.query(
           `DELETE FROM provider_api_keys WHERE provider_account_id = $1 AND id != ALL($2::text[])`,
@@ -340,7 +418,7 @@ router.put('/provider-keys/:provider', requireRole('admin'), async (req, res) =>
         await client.query(`DELETE FROM provider_api_keys WHERE provider_account_id = $1`, [provider]);
       }
 
-      for (const k of keys) {
+      for (const k of keysArray) {
         const kid = k.id || crypto.randomUUID();
         await client.query(
           `INSERT INTO provider_api_keys (id, provider_account_id, label, api_key, status, supported_models, supported_models_updated_at, updated_at)
@@ -365,8 +443,8 @@ router.put('/provider-keys/:provider', requireRole('admin'), async (req, res) =>
             k.label || 'Default',
             k.key || '',
             k.status || 'active',
-            JSON.stringify(normalizeCatalogModels(k.supported_models)),
-            k.supported_models_updated_at || null,
+            JSON.stringify(normalizeCatalogModels(k.supported_models ?? supported_models)),
+            k.supported_models_updated_at || supported_models_updated_at || now,
             now,
           ]
         );

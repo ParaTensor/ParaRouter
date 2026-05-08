@@ -68,6 +68,15 @@ export async function initSchema() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_stream_observations_request_correlation_id ON stream_observations(request_correlation_id)`);
   } catch (err: any) { console.error('Migration failed (stream observation correlation columns):', err.message); }
 
+  try {
+    await pool.query(`UPDATE model_provider_pricings SET provider_key_id = provider_account_id || ':default' WHERE provider_key_id = 'default'`);
+    await pool.query(`UPDATE model_provider_pricings_draft SET provider_key_id = provider_account_id || ':default' WHERE provider_key_id = 'default'`);
+    await pool.query(`UPDATE activity SET provider_key_id = provider_account_id || ':default' WHERE provider_key_id = 'default' AND provider_account_id IS NOT NULL`);
+    await pool.query(`UPDATE stream_observations SET provider_key_id = provider_account_id || ':default' WHERE provider_key_id = 'default' AND provider_account_id IS NOT NULL`);
+    await pool.query(`UPDATE provider_api_keys SET id = provider_account_id || ':default' WHERE id = 'default' AND NOT EXISTS (SELECT 1 FROM provider_api_keys existing WHERE existing.id = provider_api_keys.provider_account_id || ':default')`);
+    await pool.query(`DELETE FROM provider_api_keys k WHERE k.id = 'default' AND EXISTS (SELECT 1 FROM provider_api_keys existing WHERE existing.id = k.provider_account_id || ':default')`);
+  } catch (err: any) { console.error('Migration failed (provider key default id cleanup):', err.message); }
+
   const defaultLlmModels = [
     // OpenAI Models
     { id: 'gpt-5.4', name: 'gpt-5.4', provider: 'OpenAI', description: "OpenAI Flagship", category: 'Creative', context_length: 200000, global_pricing: { prompt: 2.50, completion: 15.00, cache_read: 0.25 }, score: 98.2, trend: 'up' },

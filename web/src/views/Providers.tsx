@@ -1,10 +1,11 @@
 import React from 'react';
-import {ShieldAlert, Plus, Trash2, Edit2, Globe, Cpu, Key, Copy, RefreshCw, CheckCircle2} from 'lucide-react';
+import {ShieldAlert, Plus, Trash2, Edit2, Globe, Cpu, Key, Copy, RefreshCw, CheckCircle2, Check, Pause} from 'lucide-react';
 import {ApiError, apiDelete, apiGet, apiPost, apiPut} from '../lib/api';
 import {localUser} from '../lib/session';
 import {clsx} from 'clsx';
 import { Dialog, DialogPanel, DialogBackdrop } from '@headlessui/react';
 import { Select } from '../components/Select';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { useTranslation } from "react-i18next";
 import {
   useProvidersEditUi,
@@ -110,13 +111,20 @@ export default function ProvidersView() {
   const [saving, setSaving] = React.useState(false);
   const [autoSaveState, setAutoSaveState] = React.useState<AutoSaveState>('idle');
   const { showModal, isEditing, formData, error } = useProvidersEditUi();
-  const [selectedKeyIndex, setSelectedKeyIndex] = React.useState(0);
   const [busyAction, setBusyAction] = React.useState<BusyActionState | null>(null);
   const [actionFeedback, setActionFeedback] = React.useState<ActionFeedbackState | null>(null);
   const [catalogEditorValue, setCatalogEditorValue] = React.useState('');
+  const [catalogEditorDirty, setCatalogEditorDirty] = React.useState(false);
+  const [confirmDialog, setConfirmDialog] = React.useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   const autoSaveTimerRef = React.useRef<number | null>(null);
   const autoSavePromiseRef = React.useRef<Promise<void> | null>(null);
   const autoSaveTokenRef = React.useRef<symbol | null>(null);
+  const catalogEditorDirtyRef = React.useRef(false);
   const lastAutoSavedPayloadRef = React.useRef<string | null>(null);
   const loadProviders = React.useCallback(async (): Promise<ProviderRow[] | null> => {
     if (!isAdmin) {
@@ -141,18 +149,17 @@ export default function ProvidersView() {
   }, [loadProviders]);
 
   React.useEffect(() => {
-    if (!showModal) return;
-    setSelectedKeyIndex((current) => Math.min(current, Math.max(formData.keys.length - 1, 0)));
-  }, [showModal, formData.keys.length]);
-
-  React.useEffect(() => {
     if (!showModal) {
       setCatalogEditorValue('');
+      setCatalogEditorDirty(false);
+      catalogEditorDirtyRef.current = false;
       return;
     }
-    const selectedKey = formData.keys[selectedKeyIndex];
-    setCatalogEditorValue(serializeSupportedModels(selectedKey?.supported_models));
-  }, [showModal, selectedKeyIndex, formData.keys]);
+    if (catalogEditorDirtyRef.current) return;
+    setCatalogEditorValue(serializeSupportedModels(formData.supported_models));
+    setCatalogEditorDirty(false);
+    catalogEditorDirtyRef.current = false;
+  }, [catalogEditorDirty, showModal, formData.supported_models]);
 
   React.useEffect(() => {
     if (showModal) return;
@@ -174,42 +181,48 @@ export default function ProvidersView() {
 
   const applyCatalogEditorToFormData = React.useCallback(
     (nextCatalogValue: string, baseFormData: ProviderRow = formData) => {
-      const selectedKey = baseFormData.keys[selectedKeyIndex];
-      if (!selectedKey) return baseFormData;
-
       const normalizedModels = parseSupportedModels(nextCatalogValue);
-      const previousModels = Array.isArray(selectedKey.supported_models) ? selectedKey.supported_models : [];
+      const previousModels = Array.isArray(baseFormData.supported_models) ? baseFormData.supported_models : [];
       const nextUpdatedAt = areSupportedModelsEqual(previousModels, normalizedModels)
-        ? selectedKey.supported_models_updated_at ?? null
+        ? baseFormData.supported_models_updated_at ?? null
         : Date.now();
 
-      const nextKeys = [...baseFormData.keys];
-      nextKeys[selectedKeyIndex] = {
-        ...selectedKey,
+      return {
+        ...baseFormData,
         supported_models: normalizedModels,
         supported_models_updated_at: nextUpdatedAt,
       };
-      return {
-        ...baseFormData,
-        keys: nextKeys,
-      };
     },
-    [formData, selectedKeyIndex],
+    [formData],
   );
+
+  const flushCatalogEditorToFormData = React.useCallback(() => {
+    if (!catalogEditorDirty) return;
+    const nextFormData = applyCatalogEditorToFormData(catalogEditorValue);
+    providersEdit.setFormData(nextFormData);
+    setCatalogEditorValue(serializeSupportedModels(nextFormData.supported_models));
+    setCatalogEditorDirty(false);
+    catalogEditorDirtyRef.current = false;
+  }, [applyCatalogEditorToFormData, catalogEditorDirty, catalogEditorValue]);
 
   const buildProviderPayload = React.useCallback(
     (baseFormData: ProviderRow = formData) => {
       const providerId = baseFormData.provider.trim().toLowerCase();
-      const normalizedFormData = applyCatalogEditorToFormData(catalogEditorValue, baseFormData);
+      const normalizedFormData = catalogEditorDirty
+        ? applyCatalogEditorToFormData(catalogEditorValue, baseFormData)
+        : baseFormData;
       return {
         providerId,
         payload: {
           ...normalizedFormData,
           provider: providerId,
+          key_id: normalizedFormData.key_id,
+          key: normalizedFormData.key,
+          key_status: normalizedFormData.key_status,
         },
       };
     },
-    [applyCatalogEditorToFormData, catalogEditorValue, formData],
+    [applyCatalogEditorToFormData, catalogEditorDirty, catalogEditorValue, formData],
   );
 
   const saveProviderNow = React.useCallback(
@@ -235,7 +248,14 @@ export default function ProvidersView() {
       const savePromise = (async () => {
         try {
           providersEdit.setFormData(payload);
-          await apiPut(`/api/provider-keys/${encodeURIComponent(providerId)}`, payload);
+          const saveResult = await apiPut<{keys?: {id: string; label: string}[]}>(`/api/provider-keys/${encodeURIComponent(providerId)}`, payload);
+          const savedKeyId = saveResult.keys?.[0]?.id;
+          if (savedKeyId && !payload.key_id) {
+            payload.key_id = savedKeyId;
+            providersEdit.setFormData(payload);
+          }
+          setCatalogEditorDirty(false);
+          catalogEditorDirtyRef.current = false;
           lastAutoSavedPayloadRef.current = JSON.stringify(payload);
 
           if (mode === 'manual') {
@@ -249,14 +269,8 @@ export default function ProvidersView() {
             });
             const rows = await loadProviders();
             const fresh = rows?.find((p) => p.provider === providerId);
-            const resumeLabel = formData.keys[selectedKeyIndex]?.label;
-            const resumeIndex = selectedKeyIndex;
             if (fresh) {
               providersEdit.openEdit(fresh);
-              const idx = fresh.keys.findIndex((k) => (k.label || '') === (resumeLabel || ''));
-              setSelectedKeyIndex(
-                idx >= 0 ? idx : Math.min(resumeIndex, Math.max(fresh.keys.length - 1, 0)),
-              );
             }
             window.setTimeout(() => {
               setActionFeedback((cur) => (cur?.target === 'save' ? null : cur));
@@ -285,7 +299,7 @@ export default function ProvidersView() {
       autoSavePromiseRef.current = savePromise;
       await savePromise;
     },
-    [buildProviderPayload, formData.keys, loadProviders, selectedKeyIndex, t],
+    [buildProviderPayload, loadProviders, t],
   );
 
   const flushPendingAutoSave = React.useCallback(async () => {
@@ -301,7 +315,7 @@ export default function ProvidersView() {
   }, [saveProviderNow]);
 
   React.useEffect(() => {
-    if (!showModal || !isEditing) return;
+    if (!showModal) return;
     const {providerId, payload} = buildProviderPayload();
     if (!providerId) return;
     if (!hasVersionedApiBasePath(payload.base_url || '')) {
@@ -329,7 +343,67 @@ export default function ProvidersView() {
         autoSaveTimerRef.current = null;
       }
     };
-  }, [buildProviderPayload, isEditing, saveProviderNow, showModal]);
+  }, [buildProviderPayload, saveProviderNow, showModal]);
+
+  const handleDuplicateProvider = async (provider: ProviderRow) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: '复制 Provider',
+      message: `确定要复制 Provider "${provider.label || provider.provider}" 吗？`,
+      onConfirm: async () => {
+    const newProviderId = `${provider.provider}-copy-${Date.now()}`;
+    const newLabel = `${provider.label || provider.provider} (Copy)`;
+    
+    const payload = {
+      providerId: newProviderId,
+      payload: {
+        label: newLabel,
+        base_url: provider.base_url,
+        driver_type: provider.driver_type,
+        docs_url: provider.docs_url,
+        status: provider.status,
+        key: provider.key,
+        key_status: provider.key_status,
+        supported_models: provider.supported_models || [],
+      },
+    };
+    
+    try {
+      setSaving(true);
+      providersEdit.setError(null);
+      
+      await apiPut(`/api/provider-keys/${encodeURIComponent(newProviderId)}`, payload.payload);
+      
+      // 刷新列表
+      const rows = await loadProviders();
+      
+      // 自动打开新创建的 Provider 的编辑模态框
+      if (rows) {
+        const newProvider = rows.find(p => p.provider === newProviderId);
+        if (newProvider) {
+          providersEdit.openEdit(newProvider);
+        }
+      }
+      
+      setActionFeedback({
+        target: 'duplicate',
+        kind: 'connection',
+        ok: true,
+        msg: `成功复制 Provider "${newLabel}"`,
+      });
+      
+      window.setTimeout(() => {
+        setActionFeedback((cur) => (cur?.target === 'duplicate' ? null : cur));
+      }, 3000);
+    } catch (err: any) {
+      console.error('Failed to duplicate provider:', err);
+      providersEdit.setError(err.message || '复制失败');
+    } finally {
+      setSaving(false);
+    }
+      },
+    });
+  };
 
   const handleOpenModal = (provider?: ProviderRow) => {
     if (provider) {
@@ -337,31 +411,22 @@ export default function ProvidersView() {
     } else {
       providersEdit.openNew();
     }
-    setSelectedKeyIndex(0);
   };
 
   const restoreFreshProviderIntoModal = React.useCallback(
-    (rows: ProviderRow[] | null, providerId: string, keyId?: string) => {
+    (rows: ProviderRow[] | null, providerId: string) => {
       if (!rows) return;
       const snap = getProvidersEditSnapshot();
       if (!snap.showModal || !snap.isEditing || snap.formData.provider !== providerId) return;
       const fresh = rows.find((p) => p.provider === providerId);
       if (!fresh) return;
       providersEdit.openEdit(fresh);
-      if (keyId) {
-        const idx = fresh.keys.findIndex((k) => String(k.id) === String(keyId));
-        if (idx >= 0) {
-          setSelectedKeyIndex(idx);
-          return;
-        }
-      }
-      setSelectedKeyIndex((current) => Math.min(current, Math.max(fresh.keys.length - 1, 0)));
     },
     [],
   );
 
   const handleSaveProvider = async () => {
-    if (!isEditing && formData.keys.every((k) => !k.key.trim())) {
+    if (!isEditing && !formData.key.trim()) {
         providersEdit.setError(t('providers.error_key_required'));
         return;
     }
@@ -369,17 +434,25 @@ export default function ProvidersView() {
   };
 
   const handleDeleteProvider = async (provider: string) => {
-    if (!confirm(t('providers.confirm_delete', { provider }))) return;
-    await apiDelete(`/api/provider-keys/${encodeURIComponent(provider)}`);
-    await loadProviders();
+    setConfirmDialog({
+      isOpen: true,
+      title: '删除服务商',
+      message: t('providers.confirm_delete', { provider }),
+      onConfirm: async () => {
+        await apiDelete(`/api/provider-keys/${encodeURIComponent(provider)}`);
+        await loadProviders();
+      },
+    });
   };
 
-  const handleRefreshModelCatalog = async (providerId: string, keyId?: string) => {
+  const handleRefreshModelCatalog = async (providerId: string) => {
     await flushPendingAutoSave();
-    const targetId = keyId ? `${providerId}::${keyId}` : providerId;
-    setBusyAction({target: targetId, kind: 'catalog'});
+    if (!providersEdit.get().formData.key_id && providersEdit.get().formData.key?.trim()) {
+      await saveProviderNow('auto');
+    }
+    setBusyAction({target: providerId, kind: 'catalog'});
     setActionFeedback({
-      target: targetId,
+      target: providerId,
       kind: 'catalog',
       ok: true,
       msg: t('providers.refresh_catalog_loading'),
@@ -388,22 +461,28 @@ export default function ProvidersView() {
     const abortTimer = window.setTimeout(() => abortCtl.abort(), 90_000);
     let syncOk = false;
     try {
-      const path = keyId
-        ? `/api/provider-keys/${encodeURIComponent(providerId)}/${encodeURIComponent(keyId)}/refresh-model-catalog`
-        : `/api/provider-keys/${encodeURIComponent(providerId)}/refresh-model-catalog`;
+      const currentFormData = providersEdit.get().formData;
       const res = await apiPost<{
         status: string;
         supported_models_count: number;
-      }>(path, {}, {signal: abortCtl.signal});
+      }>(
+        `/api/provider-keys/${encodeURIComponent(providerId)}/refresh-model-catalog`,
+        {
+          key_id: currentFormData.key_id,
+          api_key: currentFormData.key,
+          base_url: currentFormData.base_url,
+        },
+        {signal: abortCtl.signal},
+      );
       syncOk = true;
       setActionFeedback({
-        target: targetId,
+        target: providerId,
         kind: 'catalog',
         ok: true,
         msg: t('providers.refresh_catalog_success', {count: res.supported_models_count}),
       });
       window.setTimeout(() => {
-        setActionFeedback((cur) => (cur?.target === targetId && cur.kind === 'catalog' && cur.ok ? null : cur));
+        setActionFeedback((cur) => (cur?.target === providerId && cur.kind === 'catalog' && cur.ok ? null : cur));
       }, 10000);
     } catch (err: unknown) {
       let message = t('providers.unknown_error');
@@ -420,7 +499,7 @@ export default function ProvidersView() {
       } else if (err instanceof Error) {
         message = err.message;
       }
-      setActionFeedback({target: targetId, kind: 'catalog', ok: false, msg: message});
+      setActionFeedback({target: providerId, kind: 'catalog', ok: false, msg: message});
     } finally {
       window.clearTimeout(abortTimer);
       setBusyAction(null);
@@ -431,15 +510,126 @@ export default function ProvidersView() {
     } catch (e) {
       console.error('loadProviders after catalog refresh:', e);
     }
-    if (syncOk) restoreFreshProviderIntoModal(rows, providerId, keyId);
+    if (syncOk) restoreFreshProviderIntoModal(rows, providerId);
   };
 
-  const handleTestProviderConnection = async (providerId: string, keyId: string) => {
-    await flushPendingAutoSave();
-    const targetId = `${providerId}::${keyId}`;
-    setBusyAction({target: targetId, kind: 'connection'});
+  const handleTestAndSync = async (providerId: string) => {
+    const currentFormData = providersEdit.get().formData;
+    if (!currentFormData.key || currentFormData.key.trim() === '') {
+      setActionFeedback({
+        target: providerId,
+        kind: 'connection',
+        ok: false,
+        msg: '请先填写 API 密钥',
+      });
+      window.setTimeout(() => {
+        setActionFeedback((cur) => (cur?.target === providerId && cur.kind === 'connection' && !cur.ok ? null : cur));
+      }, 3000);
+      return;
+    }
+
+    if (!currentFormData.base_url || currentFormData.base_url.trim() === '') {
+      setActionFeedback({
+        target: providerId,
+        kind: 'connection',
+        ok: false,
+        msg: '请先填写 Base URL',
+      });
+      window.setTimeout(() => {
+        setActionFeedback((cur) => (cur?.target === providerId && cur.kind === 'connection' && !cur.ok ? null : cur));
+      }, 3000);
+      return;
+    }
+
+    setBusyAction({target: providerId, kind: 'connection'});
     setActionFeedback({
-      target: targetId,
+      target: providerId,
+      kind: 'connection',
+      ok: true,
+      msg: '正在测试连接...',
+    });
+
+    const abortCtl = new AbortController();
+    const abortTimer = window.setTimeout(() => abortCtl.abort(), 45_000);
+    try {
+      const res = await apiPost<ProviderHealthCheckResponse>(
+        `/api/provider-keys/${encodeURIComponent(providerId)}/health-check`,
+        {
+          api_key: currentFormData.key,
+          base_url: currentFormData.base_url,
+          driver_type: currentFormData.driver_type,
+        },
+        {signal: abortCtl.signal},
+      );
+      const result = Array.isArray(res.results) && res.results.length > 0 ? res.results[0] : undefined;
+      if (result?.ok) {
+        setActionFeedback({
+          target: providerId,
+          kind: 'connection',
+          ok: true,
+          msg: `连接成功，正在同步模型目录...`,
+        });
+        
+        // 测试成功，继续同步模型目录
+        await handleRefreshModelCatalog(providerId);
+      } else {
+        setActionFeedback({
+          target: providerId,
+          kind: 'connection',
+          ok: false,
+          msg: t('providers.test_connection_failed', {reason: result?.error || '未知错误'}),
+        });
+        window.setTimeout(() => {
+          setActionFeedback((cur) => (cur?.target === providerId && cur.kind === 'connection' && !cur.ok ? null : cur));
+        }, 5000);
+      }
+    } catch (err: unknown) {
+      let message = t('providers.unknown_error');
+      if (err instanceof ApiError) {
+        message = err.message || message;
+      } else if (err instanceof Error) {
+        message = err.message;
+      }
+      setActionFeedback({target: providerId, kind: 'connection', ok: false, msg: message});
+      window.setTimeout(() => {
+        setActionFeedback((cur) => (cur?.target === providerId && cur.kind === 'connection' && !cur.ok ? null : cur));
+      }, 5000);
+    } finally {
+      window.clearTimeout(abortTimer);
+      setBusyAction(null);
+    }
+  };
+
+  const handleTestProviderConnection = async (providerId: string) => {
+    if (!formData.key || formData.key.trim() === '') {
+      setActionFeedback({
+        target: providerId,
+        kind: 'connection',
+        ok: false,
+        msg: '请先填写 API 密钥',
+      });
+      window.setTimeout(() => {
+        setActionFeedback((cur) => (cur?.target === providerId && cur.kind === 'connection' && !cur.ok ? null : cur));
+      }, 3000);
+      return;
+    }
+
+    if (!formData.base_url || formData.base_url.trim() === '') {
+      setActionFeedback({
+        target: providerId,
+        kind: 'connection',
+        ok: false,
+        msg: '请先填写 Base URL',
+      });
+      window.setTimeout(() => {
+        setActionFeedback((cur) => (cur?.target === providerId && cur.kind === 'connection' && !cur.ok ? null : cur));
+      }, 3000);
+      return;
+    }
+
+    setBusyAction({target: providerId, kind: 'connection'});
+    setActionFeedback({
+      target: providerId,
       kind: 'connection',
       ok: true,
       msg: t('providers.test_connection_loading'),
@@ -451,33 +641,35 @@ export default function ProvidersView() {
     try {
       const res = await apiPost<ProviderHealthCheckResponse>(
         `/api/provider-keys/${encodeURIComponent(providerId)}/health-check`,
-        {},
+        {
+          api_key: formData.key,
+          base_url: formData.base_url,
+          driver_type: formData.driver_type,
+        },
         {signal: abortCtl.signal},
       );
       checked = true;
-      const result = Array.isArray(res.results)
-        ? res.results.find((item) => String(item.provider_key_id) === String(keyId))
-        : undefined;
+      const result = Array.isArray(res.results) && res.results.length > 0 ? res.results[0] : undefined;
       if (result?.ok) {
         setActionFeedback({
-          target: targetId,
+          target: providerId,
           kind: 'connection',
           ok: true,
           msg: t('providers.test_connection_success', {model: result.probe_model || 'n/a'}),
         });
         window.setTimeout(() => {
-          setActionFeedback((cur) => (cur?.target === targetId && cur.kind === 'connection' && cur.ok ? null : cur));
+          setActionFeedback((cur) => (cur?.target === providerId && cur.kind === 'connection' && cur.ok ? null : cur));
         }, 10000);
       } else if (result) {
         setActionFeedback({
-          target: targetId,
+          target: providerId,
           kind: 'connection',
           ok: false,
           msg: t('providers.test_connection_failed', {reason: result.error || `HTTP ${result.status}`}),
         });
       } else {
         setActionFeedback({
-          target: targetId,
+          target: providerId,
           kind: 'connection',
           ok: false,
           msg: t('providers.test_connection_unavailable'),
@@ -498,7 +690,7 @@ export default function ProvidersView() {
       } else if (err instanceof Error) {
         message = err.message;
       }
-      setActionFeedback({target: targetId, kind: 'connection', ok: false, msg: message});
+      setActionFeedback({target: providerId, kind: 'connection', ok: false, msg: message});
     } finally {
       window.clearTimeout(abortTimer);
       setBusyAction(null);
@@ -510,7 +702,7 @@ export default function ProvidersView() {
     } catch (e) {
       console.error('loadProviders after health check:', e);
     }
-    if (checked) restoreFreshProviderIntoModal(rows, providerId, keyId);
+    if (checked) restoreFreshProviderIntoModal(rows, providerId);
   };
 
   if (!isAdmin) {
@@ -530,7 +722,14 @@ export default function ProvidersView() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-zinc-900">{t('providers.providers')}</h1>
-          <p className="text-zinc-500 mt-1">{t('providers.manage_provider_account_metada')}</p>
+          <p className="text-amber-600 mt-1 text-sm flex items-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            多协议支持提示：如果一个服务商同时支持多种协议（如同时有 Claude 和 GPT 模型），可以为每种协议创建一个 Account
+          </p>
         </div>
         <button
           onClick={() => handleOpenModal()}
@@ -582,13 +781,20 @@ export default function ProvidersView() {
                 </div>
 
                 <div className="flex translate-x-1 -translate-y-1 items-center gap-0.5 opacity-0 transition-all duration-300 group-hover:translate-x-0 group-hover:translate-y-0 group-hover:opacity-100">
-
+                
                   <button 
                     onClick={() => handleOpenModal(p)}
                     className="p-2.5 hover:bg-zinc-50 rounded-xl text-zinc-400 hover:text-zinc-900 transition-all duration-200 active:scale-90"
                     title={t('providers.edit_provider')}
                   >
                     <Edit2 size={18} />
+                  </button>
+                  <button 
+                    onClick={() => handleDuplicateProvider(p)}
+                    className="p-2.5 hover:bg-zinc-50 rounded-xl text-zinc-400 hover:text-zinc-900 transition-all duration-200 active:scale-90"
+                    title="复制 Provider"
+                  >
+                    <Copy size={18} />
                   </button>
                   <button 
                     onClick={() => handleDeleteProvider(p.provider)}
@@ -625,31 +831,19 @@ export default function ProvidersView() {
                     <span className="min-w-0 truncate text-[12px] font-medium tracking-tight">{p.base_url}</span>
                   </div>
                 )}
-                {p.keys && p.keys.length > 0 && (
-                  <div className="flex max-h-24 flex-col gap-1.5 overflow-y-auto pr-0.5 [scrollbar-width:thin] [scrollbar-color:transparent_transparent] transition-all hover:[scrollbar-color:theme(colors.zinc.300)_transparent]">
-                    {p.keys.map((k, i) => {
-                      const maskedKey = k.key && k.key.length > 8 
-                        ? `${k.key.substring(0, 4)}...${k.key.substring(k.key.length - 4)}` 
-                        : (k.key ? '***' : '');
-                      
-                      if (!maskedKey) return null;
-
-                      const modelCount = Array.isArray(k.supported_models) ? k.supported_models.length : 0;
-
-                      return (
-                        <div key={i} className="flex items-center gap-2.5 text-zinc-500 transition-colors group-hover:text-zinc-600">
-                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-zinc-500 shadow-sm ring-1 ring-inset ring-zinc-200/70">
-                            <Key size={14} strokeWidth={2} />
-                          </div>
-                          <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
-                            <span className="min-w-0 flex-1 truncate font-mono text-[12px] font-medium tracking-tight">{maskedKey}</span>
-                            <span className="shrink-0 whitespace-nowrap text-[11px] font-medium tabular-nums text-zinc-400">
-                              {t('providers.key_models_count', {count: modelCount})}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
+                {p.key && (
+                  <div className="flex items-center gap-2.5 text-zinc-500 transition-colors group-hover:text-zinc-600">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-zinc-500 shadow-sm ring-1 ring-inset ring-zinc-200/70">
+                      <Key size={14} strokeWidth={2} />
+                    </div>
+                    <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                      <span className="min-w-0 flex-1 truncate font-mono text-[12px] font-medium tracking-tight">
+                        {p.key.length > 8 ? `${p.key.substring(0, 4)}...${p.key.substring(p.key.length - 4)}` : '***'}
+                      </span>
+                      <span className="shrink-0 whitespace-nowrap text-[11px] font-medium tabular-nums text-zinc-400">
+                        {t('providers.key_models_count', {count: Array.isArray(p.supported_models) ? p.supported_models.length : 0})}
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -658,12 +852,24 @@ export default function ProvidersView() {
         </div>
       )}
 
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        variant="danger"
+      />
 
-
-      <Dialog open={showModal} onClose={() => providersEdit.close()} className="relative z-50">
+      <Dialog open={showModal} onClose={async () => {
+  flushCatalogEditorToFormData();
+  await flushPendingAutoSave();
+  await loadProviders();
+  providersEdit.close();
+}} className="relative z-50">
         <DialogBackdrop className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity" />
         <div className="scrollbar-hover fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4 sm:p-6">
-            <DialogPanel className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden text-left">
+            <DialogPanel className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden text-left">
               <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white">
                 <div>
                   <h3 className="font-bold text-lg">
@@ -685,8 +891,8 @@ export default function ProvidersView() {
 
             <div className="scrollbar-hover flex-1 space-y-4 overflow-auto px-5 py-5">
               <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4">
-                <div className="grid gap-3 lg:grid-cols-4">
-                  <div className="min-w-0 space-y-2 lg:col-span-1">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="min-w-0 space-y-2">
                     <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('providers.display_name')}</label>
                     <input
                       value={formData.label}
@@ -709,7 +915,7 @@ export default function ProvidersView() {
                       className="w-full min-w-0 px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
                     />
                   </div>
-                  <div className="min-w-0 space-y-2 lg:col-span-1">
+                  <div className="min-w-0 space-y-2">
                     <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('provideraccountmodal.protocol')}</label>
                     <Select
                       value={formData.driver_type || 'openai_compatible'}
@@ -729,277 +935,155 @@ export default function ProvidersView() {
                       options={providerProtocolOptions}
                     />
                   </div>
-                  <div className="min-w-0 space-y-2 lg:col-span-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('providers.base_url')}</label>
+                </div>
+
+                <div className="mt-3 space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('providers.base_url')}</label>
+                  <input
+                    value={formData.base_url}
+                    onChange={(e) => providersEdit.setFormData({...formData, base_url: e.target.value})}
+                    placeholder={t('providers.placeholder_base_url')}
+                    className="w-full px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all font-mono"
+                  />
+                  <p className="text-[11px] text-zinc-500">{t('providers.base_url_suffix_hint')}</p>
+                </div>
+
+                <div className="mt-3 space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('api_key')}</label>
+                  <div className="relative">
                     <input
-                      value={formData.base_url}
-                      onChange={(e) => providersEdit.setFormData({...formData, base_url: e.target.value})}
-                      placeholder={t('providers.placeholder_base_url')}
-                      className="w-full px-3 py-2 border rounded-lg text-sm bg-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all font-mono"
+                      type="text"
+                      autoComplete="off"
+                      spellCheck={false}
+                      value={formData.key}
+                      onChange={(e) => {
+                        providersEdit.setFormData({...formData, key: e.target.value});
+                      }}
+                      placeholder={isEditing ? t('providers.placeholder_key_editing') : t('providers.placeholder_key_new')}
+                      className={clsx(
+                        'w-full px-3 py-2 text-sm bg-white border rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition-all font-mono pr-10',
+                        formData.key && formData.key.length > 0 ? 'border-emerald-200 bg-emerald-50/30' : 'border-zinc-200',
+                      )}
                     />
-                    <div className="text-right">
-                      <p className="inline-block text-[11px] leading-relaxed text-zinc-500">{t('providers.base_url_suffix_hint')}</p>
-                    </div>
+                    {formData.key && formData.key.length > 0 && (
+                      <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => navigator.clipboard.writeText(formData.key)}
+                          className="text-zinc-400 hover:text-zinc-800 p-1.5 rounded-md hover:bg-zinc-100 transition-colors"
+                          title="复制 API Key"
+                        >
+                          <Copy size={14} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between gap-3 pt-4 border-t border-zinc-100">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 space-y-1">
-                    <label className="text-xs font-bold uppercase tracking-widest text-zinc-400">{t('providers.api_channels')}</label>
-                  </div>
-                </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      const newKeys = [
-                        ...formData.keys,
-                        { label: t('providers.default_key_label', {n: formData.keys.length + 1}), key: '', status: 'active', supported_models: [] },
-                      ];
-                      providersEdit.setFormData({...formData, keys: newKeys});
-                      setSelectedKeyIndex(newKeys.length - 1);
-                    }}
-                    className="inline-flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-bold text-white transition-all hover:bg-zinc-800 active:scale-95"
+                    onClick={() => handleTestAndSync(formData.provider)}
+                    disabled={busyAction?.target === formData.provider}
+                    className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-50"
                   >
-                    <Plus size={14} strokeWidth={3} />
-                    {t('providers.add_key')}
+                    <RefreshCw size={12} className={busyAction?.target === formData.provider ? 'animate-spin' : ''} />
+                    测试连接并同步
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => providersEdit.setFormData({...formData, key_status: formData.key_status === 'active' ? 'inactive' : 'active'})}
+                    className={clsx(
+                      'inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-semibold transition-colors',
+                      formData.key_status === 'active' 
+                        ? 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50' 
+                        : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100'
+                    )}
+                    title={formData.key_status === 'active' ? '点击暂停' : '点击激活'}
+                  >
+                    {formData.key_status === 'active' ? (
+                      <><Pause size={12} /> 暂停</>
+                    ) : (
+                      <><Check size={12} /> 激活</>
+                    )}
                   </button>
                 </div>
+                <span className="text-[11px] text-zinc-500 self-end">
+                  当前状态：{formData.key_status === 'active' ? '激活' : '暂停'}
+                </span>
+              </div>
 
-                <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
-                  <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-2">
-                    <div className="space-y-1.5">
-                      {formData.keys.map((k, index) => {
-                        const isSelected = index === selectedKeyIndex;
-                        const modelCount = Array.isArray(k.supported_models) ? k.supported_models.length : 0;
-                        return (
-                          <button
-                            key={k.id || index}
-                            type="button"
-                            onClick={() => setSelectedKeyIndex(index)}
-                            className={clsx(
-                              'w-full rounded-xl border px-3 py-2.5 text-left transition-all',
-                              isSelected
-                                ? 'border-purple-300 bg-white shadow-sm ring-1 ring-purple-100'
-                                : 'border-zinc-200 bg-white/80 hover:border-zinc-300 hover:bg-white',
-                            )}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="min-w-0">
-                                <div className="truncate text-sm font-semibold text-zinc-900">
-                                  {k.label || t('providers.placeholder_channel_name')}
-                                </div>
-                                <div className="mt-0.5 truncate text-[11px] font-mono text-zinc-500">
-                                  {k.key ? `${k.key.slice(0, 4)}...${k.key.slice(-4)}` : t('providers.placeholder_key_new')}
-                                </div>
-                              </div>
-                              <div className="shrink-0 text-right">
-                                <div className={clsx('text-[10px] font-bold uppercase tracking-widest', k.status === 'active' ? 'text-emerald-600' : 'text-zinc-400')}>
-                                  {k.status === 'active' ? t('providers.active') : t('providers.inactive')}
-                                </div>
-                                <div className="mt-0.5 text-[10px] text-zinc-400">
-                                  {t('providers.key_models_count', {count: modelCount})}
-                                </div>
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {formData.keys[selectedKeyIndex] ? (
-                    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-                      <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-                        <div className="min-h-0 min-w-0 space-y-3 self-start">
-                          <div
-                            className={clsx(
-                              'flex flex-wrap items-center gap-2',
-                              formData.keys[selectedKeyIndex].id ? 'justify-start' : 'justify-between',
-                            )}
-                          >
-                            {!formData.keys[selectedKeyIndex].id ? (
-                              <p className="flex-1 min-w-0 text-[11px] leading-snug text-zinc-500 sm:whitespace-nowrap">
-                                {t('providers.sync_requires_save_hint')}
-                              </p>
-                            ) : null}
-                            <div className="flex flex-wrap items-center justify-start gap-2">
-                              {formData.keys[selectedKeyIndex].id && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleTestProviderConnection(formData.provider, formData.keys[selectedKeyIndex].id as string)}
-                                  disabled={busyAction?.target === `${formData.provider}::${formData.keys[selectedKeyIndex].id}`}
-                                  className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[10px] font-semibold text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-50"
-                                >
-                                  <RefreshCw size={11} className={busyAction?.target === `${formData.provider}::${formData.keys[selectedKeyIndex].id}` && busyAction.kind === 'connection' ? 'animate-spin' : ''} />
-                                  {t('providers.test_connection')}
-                                </button>
-                              )}
-                              {formData.keys[selectedKeyIndex].id && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleRefreshModelCatalog(formData.provider, formData.keys[selectedKeyIndex].id as string)}
-                                  disabled={busyAction?.target === `${formData.provider}::${formData.keys[selectedKeyIndex].id}`}
-                                  className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[10px] font-semibold text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-50"
-                                >
-                                  <RefreshCw size={11} className={busyAction?.target === `${formData.provider}::${formData.keys[selectedKeyIndex].id}` && busyAction.kind === 'catalog' ? 'animate-spin' : ''} />
-                                  {t('providers.refresh_catalog')}
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (formData.keys.length <= 1) return;
-                                  const newKeys = [...formData.keys];
-                                  newKeys.splice(selectedKeyIndex, 1);
-                                  const nextIndex = Math.min(selectedKeyIndex, Math.max(newKeys.length - 1, 0));
-                                  providersEdit.setFormData({...formData, keys: newKeys});
-                                  setSelectedKeyIndex(nextIndex);
-                                }}
-                                disabled={formData.keys.length <= 1}
-                                className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-white px-2 py-1 text-[10px] font-semibold text-red-600 hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
-                              >
-                                <Trash2 size={11} />
-                                {t('providers.delete')}
-                              </button>
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                              {t('providers.display_name')}
-                            </label>
-                            <input
-                              value={formData.keys[selectedKeyIndex].label}
-                              onChange={(e) => {
-                                const newKeys = [...formData.keys];
-                                newKeys[selectedKeyIndex].label = e.target.value;
-                                providersEdit.setFormData({...formData, keys: newKeys});
-                              }}
-                              placeholder={t('providers.placeholder_channel_name')}
-                              className="w-full min-w-0 px-3 py-2 text-sm bg-white border border-zinc-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition-all"
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                              {t('status')}
-                            </label>
-                            <Select
-                              value={formData.keys[selectedKeyIndex].status}
-                              onChange={(v) => {
-                                const newKeys = [...formData.keys];
-                                newKeys[selectedKeyIndex].status = v;
-                                providersEdit.setFormData({...formData, keys: newKeys});
-                              }}
-                              options={[
-                                { value: 'active', label: t('providers.active') },
-                                { value: 'inactive', label: t('providers.inactive') },
-                              ]}
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                              {t('api_key')}
-                            </label>
-                            <div className="relative">
-                              <input
-                                type="text"
-                                autoComplete="off"
-                                spellCheck={false}
-                                value={formData.keys[selectedKeyIndex].key}
-                                onChange={(e) => {
-                                  const newKeys = [...formData.keys];
-                                  newKeys[selectedKeyIndex].key = e.target.value;
-                                  providersEdit.setFormData({...formData, keys: newKeys});
-                                }}
-                                placeholder={isEditing && formData.keys[selectedKeyIndex].id ? t('providers.placeholder_key_editing') : t('providers.placeholder_key_new')}
-                                className={clsx(
-                                  'w-full px-3 py-2 text-sm bg-white border rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition-all font-mono pr-10',
-                                  formData.keys[selectedKeyIndex].key && formData.keys[selectedKeyIndex].key.length > 0 ? 'border-emerald-200 bg-emerald-50/30' : 'border-zinc-200',
-                                )}
-                              />
-                              {formData.keys[selectedKeyIndex].key && formData.keys[selectedKeyIndex].key.length > 0 && (
-                                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => navigator.clipboard.writeText(formData.keys[selectedKeyIndex].key)}
-                                    className="text-zinc-400 hover:text-zinc-800 p-1.5 rounded-md hover:bg-zinc-100 transition-colors"
-                                    title="复制 API Key"
-                                  >
-                                    <Copy size={14} />
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex min-h-0 min-w-0 flex-col gap-1.5 xl:h-full">
-                          <label className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                            {t('providers.catalog_models_editor')}
-                          </label>
-                          <textarea
-                            value={catalogEditorValue}
-                            onChange={(e) => setCatalogEditorValue(e.target.value)}
-                            onBlur={(e) => {
-                              const nextValue = e.target.value;
-                              const nextFormData = applyCatalogEditorToFormData(nextValue);
-                              providersEdit.setFormData(nextFormData);
-                              setCatalogEditorValue(serializeSupportedModels(nextFormData.keys[selectedKeyIndex]?.supported_models));
-                            }}
-                            placeholder={t('providers.supported_models_placeholder')}
-                            spellCheck={false}
-                            className="scrollbar-hover min-h-[12rem] w-full flex-1 resize-y rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 font-mono text-[12px] leading-6 text-zinc-800 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
-                          />
-                          <div className="flex items-center justify-between gap-3 text-[11px] text-zinc-500">
-                            <span>{t('providers.catalog_models_list')}</span>
-                            <span className="tabular-nums">
-                              {t('providers.key_models_count', {count: parseSupportedModels(catalogEditorValue).length})}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
+              <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+                <label className="shrink-0 text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2 block">
+                  {t('providers.catalog_models_editor')}
+                </label>
+                <textarea
+                  value={catalogEditorValue}
+                  onChange={(e) => {
+                    const nextValue = e.target.value;
+                    const nextFormData = applyCatalogEditorToFormData(nextValue);
+                    catalogEditorDirtyRef.current = true;
+                    setCatalogEditorDirty(true);
+                    setCatalogEditorValue(nextValue);
+                    providersEdit.setFormData(nextFormData);
+                  }}
+                  onBlur={(e) => {
+                    const nextValue = e.target.value;
+                    const nextFormData = applyCatalogEditorToFormData(nextValue);
+                    providersEdit.setFormData(nextFormData);
+                    setCatalogEditorValue(serializeSupportedModels(nextFormData.supported_models));
+                    setCatalogEditorDirty(false);
+                    catalogEditorDirtyRef.current = false;
+                  }}
+                  placeholder={t('providers.supported_models_placeholder')}
+                  spellCheck={false}
+                  className="scrollbar-hover min-h-[12rem] w-full resize-y rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 font-mono text-[12px] leading-6 text-zinc-800 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                />
+                <div className="flex items-center justify-between gap-3 text-[11px] text-zinc-500">
+                  <span>{t('providers.catalog_models_list')}</span>
+                  <span className="tabular-nums">
+                    {t('providers.key_models_count', {count: parseSupportedModels(catalogEditorValue).length})}
+                  </span>
                 </div>
+                {(() => {
+                  const models = parseSupportedModels(catalogEditorValue);
+                  const hasClaudeModels = models.some(model => 
+                    model.toLowerCase().includes('claude')
+                  );
+                  const isOpenAIProtocol = formData.driver_type === 'openai_compatible';
+                  if (hasClaudeModels && isOpenAIProtocol) {
+                    return (
+                      <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                        <span className="font-semibold">提示：</span>
+                        检测到 Claude 类型模型，建议使用 Anthropic 协议以获得更好的兼容性。
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
               </div>
 
               <div className="border-t px-6 py-4 bg-zinc-50/80 flex flex-col sm:flex-row sm:items-center justify-end shrink-0 gap-3">
-              {isEditing ? (
-                <div className="sm:mr-auto text-[11px] text-zinc-500">
-                  {autoSaveState === 'saving' && t('providers.saving')}
-                  {autoSaveState === 'saved' && t('providers.save_success')}
-                  {autoSaveState === 'error' && t('providers.unknown_error')}
-                </div>
-              ) : null}
+              <div className="sm:mr-auto text-[11px] text-zinc-500">
+                {autoSaveState === 'saving' && t('providers.saving')}
+                {autoSaveState === 'saved' && t('providers.save_success')}
+                {autoSaveState === 'error' && t('providers.unknown_error')}
+              </div>
               <button
-                onClick={() => providersEdit.close()}
+                onClick={async () => {
+                  flushCatalogEditorToFormData();
+                  await flushPendingAutoSave();
+                  await loadProviders();
+                  providersEdit.close();
+                }}
                 className="text-[13px] font-bold text-zinc-500 hover:text-zinc-900 px-3"
                 disabled={saving}
               >
                 {t('common.close')}
               </button>
-              {!isEditing ? (
-                <button
-                  onClick={handleSaveProvider}
-                  disabled={saving || !formData.provider.trim() || formData.keys.every(k => !k.key.trim())}
-                  className="bg-purple-600 text-white rounded-lg px-6 py-2 text-sm font-semibold shadow-sm hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
-                >
-                  {saving ? (
-                    <>
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      <span>{t('providers.saving')}</span>
-                    </>
-                  ) : (
-                    <span>{t('providers.create_provider_btn')}</span>
-                  )}
-                </button>
-              ) : null}
             </div>
             </DialogPanel>
         </div>

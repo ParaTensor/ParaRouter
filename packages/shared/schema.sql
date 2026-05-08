@@ -341,6 +341,13 @@ ALTER TABLE provider_api_keys ADD COLUMN IF NOT EXISTS health_error TEXT;
 ALTER TABLE provider_api_keys ADD COLUMN IF NOT EXISTS health_fail_count INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE provider_api_keys ADD COLUMN IF NOT EXISTS health_alert_sent_at BIGINT;
 
+UPDATE model_provider_pricings SET provider_key_id = provider_account_id || ':default' WHERE provider_key_id = 'default';
+UPDATE model_provider_pricings_draft SET provider_key_id = provider_account_id || ':default' WHERE provider_key_id = 'default';
+UPDATE activity SET provider_key_id = provider_account_id || ':default' WHERE provider_key_id = 'default' AND provider_account_id IS NOT NULL;
+UPDATE stream_observations SET provider_key_id = provider_account_id || ':default' WHERE provider_key_id = 'default' AND provider_account_id IS NOT NULL;
+UPDATE provider_api_keys SET id = provider_account_id || ':default' WHERE id = 'default' AND NOT EXISTS (SELECT 1 FROM provider_api_keys existing WHERE existing.id = provider_api_keys.provider_account_id || ':default');
+DELETE FROM provider_api_keys k WHERE k.id = 'default' AND EXISTS (SELECT 1 FROM provider_api_keys existing WHERE existing.id = k.provider_account_id || ':default');
+
 CREATE TABLE IF NOT EXISTS billing_records (
   id BIGSERIAL PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

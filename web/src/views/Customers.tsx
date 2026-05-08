@@ -4,6 +4,7 @@ import { Dialog, DialogPanel, DialogBackdrop } from '@headlessui/react';
 import {apiGet, apiPost, apiPatch, apiDelete} from '../lib/api';
 import {localUser} from '../lib/session';
 import {useTranslation} from 'react-i18next';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 interface Customer {
   id: string;
@@ -228,16 +229,29 @@ export default function CustomersView() {
     }
   };
 
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+
   const handleDeleteKey = async (keyId: string) => {
-    if (!window.confirm(t('customers.confirm_delete_key'))) return;
-    try {
-      await apiDelete(`/api/admin/customers/keys/${keyId}`);
-      if (selectedCustomer) await loadCustomerKeys(selectedCustomer);
-      await loadCustomers();
-      showNotification(t('customers.key_deleted'), 'success');
-    } catch (error: any) {
-      showNotification(error?.message || t('customers.key_delete_failed'), 'error');
-    }
+    setConfirmDialog({
+      isOpen: true,
+      title: '删除 Key',
+      message: t('customers.confirm_delete_key'),
+      onConfirm: async () => {
+        try {
+          await apiDelete(`/api/admin/customers/keys/${keyId}`);
+          if (selectedCustomer) await loadCustomerKeys(selectedCustomer);
+          await loadCustomers();
+          showNotification(t('customers.key_deleted'), 'success');
+        } catch (error: any) {
+          showNotification(error?.message || t('customers.key_delete_failed'), 'error');
+        }
+      },
+    });
   };
 
   const copyToClipboard = (text: string, id: string) => {
@@ -887,6 +901,15 @@ export default function CustomersView() {
             </DialogPanel>
           </div>
       </Dialog>
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        variant="danger"
+      />
     </div>
   );
 }

@@ -26,7 +26,6 @@ export type PricingEditFormState = {
   contextLength: string;
   latencyMs: string;
   markupRate: string;
-  providerKeyId: string;
   discountRate: string;
 };
 
@@ -53,7 +52,6 @@ function emptyState(): PricingEditFormState {
     contextLength: '',
     latencyMs: '',
     markupRate: '',
-    providerKeyId: '',
     discountRate: '1.0',
   };
 }
@@ -155,9 +153,6 @@ export const pricingEdit = {
   setMarkupRate(v: string) {
     patch({ markupRate: v });
   },
-  setProviderKeyId(v: string) {
-    patch({ providerKeyId: v });
-  },
   setDiscountRate(v: string) {
     patch({ discountRate: v });
   },
@@ -183,15 +178,9 @@ export const pricingEdit = {
       latencyMs: '',
       markupRate: '',
     };
-    const allKeys = providerKeyRows.flatMap((p) =>
-      (p.keys || []).filter((k) => !!k.id).map((k) => ({ id: k.id as string, provider: p.provider })),
-    );
-    if (allKeys.length > 0) {
-      const firstKey = allKeys[0]!;
-      next.providerKeyId = firstKey.id;
-      next.providerAccountId = firstKey.provider;
+    if (providerKeyRows.length > 0) {
+      next.providerAccountId = providerKeyRows[0].provider;
     } else {
-      next.providerKeyId = '';
       next.providerAccountId = '';
     }
     patch(next);
@@ -219,7 +208,6 @@ export const pricingEdit = {
       contextLength: n(row.context_length),
       latencyMs: n(row.latency_ms),
       markupRate: n(row.markup_rate),
-      providerKeyId: row.provider_key_id || '',
     });
   },
   closeEditDrawer() {

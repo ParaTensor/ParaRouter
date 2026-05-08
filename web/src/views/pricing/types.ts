@@ -21,7 +21,7 @@ export type PricingRow = {
   latency_ms?: number | null;
   is_top_provider?: boolean | null;
   status?: string;
-  provider_key_id: string;
+  provider_key_id?: string;
   updated_at?: number;
 };
 
@@ -40,7 +40,9 @@ export type ProviderKeyRow = {
   driver_type?: string;
   supported_models?: string[];
   supported_models_updated_at?: number | null;
-  keys?: { id?: string; label: string; supported_models?: string[] }[];
+  key: string;
+  key_status: string;
+  id?: string;
 };
 
 export type PricingTableRow = PricingRow & {
